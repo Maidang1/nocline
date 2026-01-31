@@ -3,6 +3,8 @@ import SwiftUI
 struct ExpandedPanelView: View {
     let state: NotchiState
     let stats: SessionStats
+    let usageService: ClaudeUsageService
+    let onSettingsTap: () -> Void
 
     private var isWorking: Bool {
         state == .working || state == .thinking
@@ -10,6 +12,12 @@ struct ExpandedPanelView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            UsageBarView(
+                usage: usageService.currentUsage,
+                isLoading: usageService.isLoading,
+                error: usageService.error,
+                onSettingsTap: onSettingsTap
+            )
             headerSection
             Divider().background(Color.white.opacity(0.08))
             statsSection
@@ -80,10 +88,10 @@ struct ExpandedPanelView: View {
 
     private var emptyState: some View {
         VStack(spacing: 8) {
-            Text("No active session")
+            Text("Waiting for activity")
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(TerminalColors.secondaryText)
-            Text("Run Claude in terminal")
+            Text("Use a tool in Claude Code to start tracking")
                 .font(.system(size: 12))
                 .foregroundColor(TerminalColors.dimmedText)
         }

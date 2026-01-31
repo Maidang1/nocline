@@ -2,6 +2,7 @@ import SwiftUI
 
 extension Notification.Name {
     static let notchiShouldCollapse = Notification.Name("notchiShouldCollapse")
+    static let notchiOpenSettings = Notification.Name("notchiOpenSettings")
 }
 
 private let cornerRadiusInsets = (
@@ -13,6 +14,7 @@ struct NotchContentView: View {
     let notchSize: CGSize
     var stateMachine: NotchiStateMachine = .shared
     var panelManager: NotchPanelManager = .shared
+    var usageService: ClaudeUsageService = .shared
     @State private var bobOffset: CGFloat = 0
 
     private let openedSize = CGSize(width: 380, height: 400)
@@ -78,8 +80,13 @@ struct NotchContentView: View {
                 .frame(height: notchSize.height)
 
             if isExpanded {
-                ExpandedPanelView(state: stateMachine.currentState, stats: stateMachine.stats)
-                    .frame(width: openedSize.width - 48, height: openedSize.height - notchSize.height - 24)
+                ExpandedPanelView(
+                    state: stateMachine.currentState,
+                    stats: stateMachine.stats,
+                    usageService: usageService,
+                    onSettingsTap: { openSettings() }
+                )
+                .frame(width: openedSize.width - 48, height: openedSize.height - notchSize.height - 24)
             }
         }
     }
@@ -108,6 +115,11 @@ struct NotchContentView: View {
     private func restartBobAnimation() {
         bobOffset = 0
         startBobAnimation()
+    }
+
+    private func openSettings() {
+        panelManager.collapse()
+        NotificationCenter.default.post(name: .notchiOpenSettings, object: nil)
     }
 }
 

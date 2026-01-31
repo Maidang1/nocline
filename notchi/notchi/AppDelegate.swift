@@ -9,6 +9,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setupNotchWindow()
         observeScreenChanges()
         startHookServices()
+        startUsageService()
+        observeSettingsRequest()
     }
 
     private func startHookServices() {
@@ -99,5 +101,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             height: windowHeight
         )
         panel.setFrame(frame, display: true)
+    }
+
+    private func startUsageService() {
+        ClaudeUsageService.shared.startPolling()
+    }
+
+    private func observeSettingsRequest() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(openSettings),
+            name: .notchiOpenSettings,
+            object: nil
+        )
+    }
+
+    @objc private func openSettings() {
+        SettingsWindowController.shared.showSettings()
     }
 }

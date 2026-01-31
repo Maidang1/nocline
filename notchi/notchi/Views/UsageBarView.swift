@@ -1,0 +1,102 @@
+import SwiftUI
+
+struct UsageBarView: View {
+    let usage: QuotaPeriod?
+    let isLoading: Bool
+    let error: String?
+    let onSettingsTap: () -> Void
+
+    private var usageColor: Color {
+        guard let usage else { return TerminalColors.dimmedText }
+        let percentage = usage.usagePercentage
+        if percentage < 50 {
+            return TerminalColors.green
+        } else if percentage < 80 {
+            return TerminalColors.amber
+        } else {
+            return TerminalColors.red
+        }
+    }
+
+    var body: some View {
+        if KeychainManager.hasCredentials {
+            connectedView
+        } else {
+            unconfiguredView
+        }
+    }
+
+    private var connectedView: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("Claude Usage")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(TerminalColors.secondaryText)
+                Spacer()
+                if isLoading {
+                    ProgressView()
+                        .controlSize(.mini)
+                } else if let usage {
+                    Text("\(usage.usagePercentage)%")
+                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                        .foregroundColor(usageColor)
+                }
+            }
+
+            progressBar
+
+            if let usage, let resetTime = usage.formattedResetTime {
+                Text("Resets in \(resetTime)")
+                    .font(.system(size: 10))
+                    .foregroundColor(TerminalColors.dimmedText)
+            } else if let error {
+                Button(action: onSettingsTap) {
+                    HStack(spacing: 4) {
+                        Text(error)
+                        Text("– Tap to fix")
+                            .foregroundColor(TerminalColors.secondaryText)
+                    }
+                    .font(.system(size: 10))
+                    .foregroundColor(TerminalColors.red)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.bottom, 12)
+    }
+
+    private var progressBar: some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(TerminalColors.subtleBackground)
+
+                if let usage {
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(usageColor)
+                        .frame(width: geometry.size.width * Double(usage.usagePercentage) / 100)
+                }
+            }
+        }
+        .frame(height: 4)
+    }
+
+    private var unconfiguredView: some View {
+        Button(action: onSettingsTap) {
+            HStack(spacing: 6) {
+                Image(systemName: "gauge.with.dots.needle.33percent")
+                    .font(.system(size: 11))
+                Text("Configure usage tracking")
+                    .font(.system(size: 11))
+            }
+            .foregroundColor(TerminalColors.secondaryText)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 8)
+            .padding(.horizontal, 10)
+            .background(TerminalColors.subtleBackground)
+            .cornerRadius(6)
+        }
+        .buttonStyle(.plain)
+        .padding(.bottom, 12)
+    }
+}
