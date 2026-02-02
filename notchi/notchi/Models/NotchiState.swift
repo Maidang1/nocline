@@ -33,4 +33,35 @@ enum NotchiState: String, CaseIterable {
         case .sleeping: return "Sleeping"
         }
     }
+
+    var canWalk: Bool {
+        switch self {
+        case .sleeping, .alert:
+            return false
+        default:
+            return true
+        }
+    }
+
+    var swayAmplitude: Double {
+        switch self {
+        case .sleeping: return 1.0
+        case .idle:     return 3.0
+        case .thinking: return 5.0
+        case .working:  return 4.0
+        case .happy:    return 8.0
+        case .alert:    return 2.0
+        }
+    }
+
+    var walkFrequencyRange: ClosedRange<Double> {
+        switch self {
+        case .sleeping: return 30.0...60.0
+        case .idle:     return 8.0...15.0
+        case .thinking: return 3.0...8.0
+        case .working:  return 5.0...12.0
+        case .happy:    return 2.0...5.0
+        case .alert:    return 20.0...30.0
+        }
+    }
 }

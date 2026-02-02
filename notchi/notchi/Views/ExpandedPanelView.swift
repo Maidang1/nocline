@@ -11,28 +11,39 @@ struct ExpandedPanelView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if !stats.recentEvents.isEmpty || stats.isProcessing {
-                Divider().background(Color.white.opacity(0.08))
-                activitySection
-            }
+        GeometryReader { geometry in
+            VStack(alignment: .leading, spacing: 0) {
+                // Grass at top - OUTSIDE padding for edge-to-edge
+                GrassIslandView(state: state)
+                    .frame(height: geometry.size.height * 0.3)
+                    .frame(maxWidth: .infinity)
 
-            if stats.sessionStartTime == nil && stats.recentEvents.isEmpty {
-                Spacer()
-                emptyState
-                Spacer()
-            }
+                // Rest of content WITH padding
+                VStack(alignment: .leading, spacing: 0) {
+                    if !stats.recentEvents.isEmpty || stats.isProcessing {
+                        Divider().background(Color.white.opacity(0.08))
+                        activitySection
+                    }
 
-            UsageBarView(
-                usage: usageService.currentUsage,
-                isLoading: usageService.isLoading,
-                error: usageService.error,
-                onSettingsTap: onSettingsTap
-            )
+                    // Empty state when no session/events
+                    if stats.sessionStartTime == nil && stats.recentEvents.isEmpty {
+                        Spacer()
+                        emptyState
+                        Spacer()
+                    }
+
+                    UsageBarView(
+                        usage: usageService.currentUsage,
+                        isLoading: usageService.isLoading,
+                        error: usageService.error,
+                        onSettingsTap: onSettingsTap
+                    )
+                }
+                .padding(.horizontal, 12)
+            }
+            .padding(.bottom, 8)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
     private var activitySection: some View {
@@ -83,6 +94,11 @@ struct ExpandedPanelView: View {
         }
     }
 
+    private var topFadeGradient: some View {
+        LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+            .frame(height: 16)
+    }
+
     private var emptyState: some View {
         VStack(spacing: 8) {
             Text("Waiting for activity")
@@ -93,10 +109,5 @@ struct ExpandedPanelView: View {
                 .foregroundColor(TerminalColors.dimmedText)
         }
         .frame(maxWidth: .infinity)
-    }
-
-    private var topFadeGradient: some View {
-        LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
-            .frame(height: 16)
     }
 }
