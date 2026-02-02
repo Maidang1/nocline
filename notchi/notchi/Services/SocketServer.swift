@@ -140,6 +140,8 @@ final class SocketServer {
             let tool = event.tool ?? "unknown"
             let success = event.status != "error"
             logger.info("Result: \(success ? "✓" : "✗", privacy: .public) \(tool, privacy: .public)")
+        case "Stop", "SubagentStop":
+            logger.info("Done")
         default:
             break
         }

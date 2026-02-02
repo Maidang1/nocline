@@ -46,24 +46,16 @@ struct ActivityRowView: View {
             .foregroundColor(TerminalColors.primaryText)
     }
 
-    @ViewBuilder
     private var statusLabel: some View {
-        switch event.status {
-        case .success:
-            Text("Completed")
-                .font(.system(size: 12))
-                .foregroundColor(TerminalColors.secondaryText)
-        case .error:
-            Text("Failed")
-                .font(.system(size: 12))
-                .foregroundColor(TerminalColors.red)
-        case .running:
-            EmptyView()
-        }
+        let isSuccess = event.status == .success
+        return Text(isSuccess ? "Completed" : "Failed")
+            .font(.system(size: 12))
+            .foregroundColor(isSuccess ? TerminalColors.secondaryText : TerminalColors.red)
     }
 }
 
 struct WorkingIndicatorView: View {
+    let state: NotchiState
     @State private var dotCount = 1
     @State private var symbolPhase = 0
 
@@ -75,22 +67,36 @@ struct WorkingIndicatorView: View {
         String(repeating: ".", count: dotCount)
     }
 
+    private var isDone: Bool {
+        state == .happy
+    }
+
     var body: some View {
-        HStack(spacing: 8) {
-            Text(symbols[symbolPhase])
-                .font(.system(size: 14, weight: .bold))
-                .foregroundColor(TerminalColors.claudeOrange)
-                .frame(width: 14, alignment: .center)
-            Text("Working\(dots)")
-                .font(.system(size: 13, weight: .medium).italic())
-                .foregroundColor(TerminalColors.claudeOrange)
+        HStack(spacing: 4) {
+            if isDone {
+                Text("✓")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(TerminalColors.green)
+                    .frame(width: 14, alignment: .center)
+                Text("Done!")
+                    .font(.system(size: 13, weight: .medium).italic())
+                    .foregroundColor(TerminalColors.green)
+            } else {
+                Text(symbols[symbolPhase])
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(TerminalColors.claudeOrange)
+                    .frame(width: 14, alignment: .center)
+                Text("Thinking\(dots)")
+                    .font(.system(size: 13, weight: .medium).italic())
+                    .foregroundColor(TerminalColors.claudeOrange)
+            }
         }
         .padding(.vertical, 6)
         .onReceive(dotsTimer) { _ in
-            dotCount = (dotCount % 3) + 1
+            if !isDone { dotCount = (dotCount % 3) + 1 }
         }
         .onReceive(symbolTimer) { _ in
-            symbolPhase = (symbolPhase + 1) % symbols.count
+            if !isDone { symbolPhase = (symbolPhase + 1) % symbols.count }
         }
     }
 }

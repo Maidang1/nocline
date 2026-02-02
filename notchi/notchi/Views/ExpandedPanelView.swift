@@ -6,14 +6,12 @@ struct ExpandedPanelView: View {
     let usageService: ClaudeUsageService
     let onSettingsTap: () -> Void
 
-    private var isWorking: Bool {
-        stats.isProcessing && state != .idle
+    private var showIndicator: Bool {
+        state != .idle && state != .sleeping
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            headerSection
-
             if !stats.recentEvents.isEmpty || stats.isProcessing {
                 Divider().background(Color.white.opacity(0.08))
                 activitySection
@@ -35,20 +33,6 @@ struct ExpandedPanelView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .topLeading)
-    }
-
-    private var headerSection: some View {
-        HStack(spacing: 8) {
-            if isWorking {
-                ProcessingSpinner()
-            }
-            Text(state.displayName)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(.white)
-            Spacer()
-        }
-        .padding(.bottom, 16)
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isWorking)
     }
 
     private var activitySection: some View {
@@ -86,14 +70,14 @@ struct ExpandedPanelView: View {
                 }
 
                 VStack {
-                    fadeGradient(direction: .top)
+                    topFadeGradient
                     Spacer()
                 }
                 .allowsHitTesting(false)
             }
 
-            if isWorking {
-                WorkingIndicatorView()
+            if showIndicator {
+                WorkingIndicatorView(state: state)
                     .padding(.top, 4)
             }
         }
@@ -111,12 +95,8 @@ struct ExpandedPanelView: View {
         .frame(maxWidth: .infinity)
     }
 
-    private func fadeGradient(direction: Edge) -> some View {
-        LinearGradient(
-            colors: [.black, .clear],
-            startPoint: direction == .top ? .top : .bottom,
-            endPoint: direction == .top ? .bottom : .top
-        )
-        .frame(height: 16)
+    private var topFadeGradient: some View {
+        LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+            .frame(height: 16)
     }
 }

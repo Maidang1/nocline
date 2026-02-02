@@ -12,10 +12,8 @@ final class NotchiStateMachine {
     let stats = SessionStats()
 
     private var sleepTimer: Task<Void, Never>?
-    private var revertTimer: Task<Void, Never>?
 
     private static let sleepDelay: Duration = .seconds(300)
-    private static let revertDelay: Duration = .seconds(3)
 
     private init() {
         startSleepTimer()
@@ -25,6 +23,8 @@ final class NotchiStateMachine {
         cancelSleepTimer()
         stats.updateProcessingState(status: event.status)
 
+        let isDone = event.status == "waiting_for_input"
+
         switch event.event {
         case "SessionStart":
             stats.startSession()
@@ -33,22 +33,23 @@ final class NotchiStateMachine {
         case "PreToolUse":
             let toolInput = event.toolInput?.mapValues { $0.value }
             stats.recordPreToolUse(tool: event.tool, toolInput: toolInput, toolUseId: event.toolUseId)
-            cancelRevertTimer()
-            transition(to: .working)
+            transition(to: .thinking)
 
         case "PostToolUse":
             let success = event.status != "error"
             stats.recordPostToolUse(tool: event.tool, toolUseId: event.toolUseId, success: success)
-            transition(to: success ? .happy : .alert)
-            scheduleRevert()
+
+        case "Stop", "SubagentStop":
+            transition(to: .happy)
 
         case "SessionEnd":
             stats.endSession()
-            cancelRevertTimer()
             transition(to: .idle)
 
         default:
-            break
+            if isDone && currentState != .idle {
+                transition(to: .happy)
+            }
         }
 
         startSleepTimer()
@@ -71,18 +72,5 @@ final class NotchiStateMachine {
     private func cancelSleepTimer() {
         sleepTimer?.cancel()
         sleepTimer = nil
-    }
-
-    private func scheduleRevert() {
-        revertTimer = Task {
-            try? await Task.sleep(for: Self.revertDelay)
-            guard !Task.isCancelled else { return }
-            transition(to: .idle)
-        }
-    }
-
-    private func cancelRevertTimer() {
-        revertTimer?.cancel()
-        revertTimer = nil
     }
 }
