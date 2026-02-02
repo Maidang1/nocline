@@ -54,14 +54,12 @@ struct NotchContentView: View {
         .padding(.horizontal, isExpanded ? cornerRadiusInsets.opened.top : cornerRadiusInsets.closed.bottom)
         .padding(.bottom, isExpanded ? 12 : 0)
         .background {
-            if isExpanded {
-                VStack(spacing: 0) {
-                    GrassIslandView(state: stateMachine.currentState)
-                        .frame(height: grassHeight)
-                    Color.black
-                }
-            } else {
+            ZStack(alignment: .top) {
                 Color.black
+                GrassIslandView(state: stateMachine.currentState)
+                    .frame(height: grassHeight)
+                    .drawingGroup()
+                    .opacity(isExpanded ? 1 : 0)
             }
         }
         .clipShape(NotchShape(
@@ -101,6 +99,14 @@ struct NotchContentView: View {
                 .frame(
                     width: NotchConstants.expandedPanelSize.width - 48,
                     height: NotchConstants.expandedPanelSize.height - notchSize.height - 24
+                )
+                .transition(
+                    .asymmetric(
+                        insertion: .scale(scale: 0.8, anchor: .top)
+                            .combined(with: .opacity)
+                            .animation(.smooth(duration: 0.35)),
+                        removal: .opacity.animation(.easeOut(duration: 0.15))
+                    )
                 )
             }
         }
