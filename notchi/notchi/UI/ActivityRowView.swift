@@ -34,8 +34,8 @@ struct ActivityRowView: View {
 
     private var bulletColor: Color {
         switch event.status {
-        case .running: return TerminalColors.claudeOrange
-        case .success: return TerminalColors.amber
+        case .running: return TerminalColors.amber
+        case .success: return TerminalColors.green
         case .error: return TerminalColors.red
         }
     }

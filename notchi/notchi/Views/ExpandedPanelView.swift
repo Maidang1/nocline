@@ -7,7 +7,7 @@ struct ExpandedPanelView: View {
     let onSettingsTap: () -> Void
 
     private var isWorking: Bool {
-        state == .working || state == .thinking
+        stats.isProcessing && state != .idle
     }
 
     var body: some View {
@@ -20,10 +20,10 @@ struct ExpandedPanelView: View {
             }
 
             if stats.sessionStartTime == nil && stats.recentEvents.isEmpty {
+                Spacer()
                 emptyState
+                Spacer()
             }
-
-            Spacer()
 
             UsageBarView(
                 usage: usageService.currentUsage,
@@ -51,10 +51,6 @@ struct ExpandedPanelView: View {
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isWorking)
     }
 
-    private var completedEvents: [SessionEvent] {
-        stats.recentEvents.filter { $0.status != .running }
-    }
-
     private var activitySection: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("Activity")
@@ -64,20 +60,34 @@ struct ExpandedPanelView: View {
                 .padding(.bottom, 8)
 
             ZStack(alignment: .top) {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        ForEach(completedEvents) { event in
-                            ActivityRowView(event: event)
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 0) {
+                            ForEach(stats.recentEvents) { event in
+                                ActivityRowView(event: event)
+                                    .id(event.id)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(maxHeight: 200)
+                    .onAppear {
+                        if let id = stats.recentEvents.last?.id {
+                            proxy.scrollTo(id, anchor: .bottom)
                         }
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .onChange(of: stats.recentEvents.last?.id) { _, newId in
+                        if let id = newId {
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                proxy.scrollTo(id, anchor: .bottom)
+                            }
+                        }
+                    }
                 }
-                .frame(maxHeight: 200)
 
                 VStack {
                     fadeGradient(direction: .top)
                     Spacer()
-                    fadeGradient(direction: .bottom)
                 }
                 .allowsHitTesting(false)
             }
@@ -99,7 +109,6 @@ struct ExpandedPanelView: View {
                 .foregroundColor(TerminalColors.dimmedText)
         }
         .frame(maxWidth: .infinity)
-        .padding(.top, 40)
     }
 
     private func fadeGradient(direction: Edge) -> some View {
