@@ -1,93 +1,96 @@
+import Combine
 import SwiftUI
 
 struct ActivityRowView: View {
     let event: SessionEvent
-    @State private var isExpanded = false
-
-    private var hasExpandableContent: Bool {
-        event.toolInput != nil && !(event.toolInput?.isEmpty ?? true)
-    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Button {
-                guard hasExpandableContent else { return }
-                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                    isExpanded.toggle()
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 8) {
+                bullet
+                toolName
+                if event.status != .running {
+                    statusLabel
                 }
-            } label: {
-                HStack(spacing: 10) {
-                    statusDot
-                    toolName
-                    Spacer()
-                    if hasExpandableContent {
-                        chevron
-                    }
-                }
-                .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
 
-            if isExpanded, let input = event.toolInput {
-                ToolArgumentsView(arguments: input)
-                    .padding(.top, 8)
-                    .padding(.leading, 18)
+            if let description = event.description {
+                Text(description)
+                    .font(.system(size: 12).italic())
+                    .foregroundColor(TerminalColors.dimmedText)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .padding(.leading, 16)
             }
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, 6)
     }
 
-    @ViewBuilder
-    private var statusDot: some View {
-        Circle()
-            .fill(statusColor)
-            .frame(width: 8, height: 8)
-            .modifier(PulsingModifier(isActive: event.status == .running))
+    private var bullet: some View {
+        Text("•")
+            .font(.system(size: 14, weight: .bold))
+            .foregroundColor(bulletColor)
     }
 
-    private var statusColor: Color {
+    private var bulletColor: Color {
         switch event.status {
-        case .running: return .white
-        case .success: return TerminalColors.green
+        case .running: return TerminalColors.claudeOrange
+        case .success: return TerminalColors.amber
         case .error: return TerminalColors.red
         }
     }
 
     private var toolName: some View {
         Text(event.tool ?? event.type)
-            .font(.system(size: 13, weight: .medium))
+            .font(.system(size: 13, weight: .semibold))
             .foregroundColor(TerminalColors.primaryText)
     }
 
-    private var chevron: some View {
-        Image(systemName: "chevron.right")
-            .font(.system(size: 10, weight: .semibold))
-            .foregroundColor(TerminalColors.secondaryText)
-            .rotationEffect(.degrees(isExpanded ? 90 : 0))
+    @ViewBuilder
+    private var statusLabel: some View {
+        switch event.status {
+        case .success:
+            Text("Completed")
+                .font(.system(size: 12))
+                .foregroundColor(TerminalColors.secondaryText)
+        case .error:
+            Text("Failed")
+                .font(.system(size: 12))
+                .foregroundColor(TerminalColors.red)
+        case .running:
+            EmptyView()
+        }
     }
 }
 
-private struct PulsingModifier: ViewModifier {
-    let isActive: Bool
-    @State private var isPulsing = false
+struct WorkingIndicatorView: View {
+    @State private var dotCount = 1
+    @State private var symbolPhase = 0
 
-    func body(content: Content) -> some View {
-        content
-            .opacity(isActive ? (isPulsing ? 0.4 : 1.0) : 1.0)
-            .onAppear {
-                guard isActive else { return }
-                withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) {
-                    isPulsing = true
-                }
-            }
-            .onChange(of: isActive) { _, newValue in
-                if newValue {
-                    withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) {
-                        isPulsing = true
-                    }
-                } else {
-                    isPulsing = false
-                }
-            }
+    private let symbols = ["·", "✢", "✳", "∗", "✻", "✽"]
+    private let dotsTimer = Timer.publish(every: 0.4, on: .main, in: .common).autoconnect()
+    private let symbolTimer = Timer.publish(every: 0.15, on: .main, in: .common).autoconnect()
+
+    private var dots: String {
+        String(repeating: ".", count: dotCount)
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(symbols[symbolPhase])
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(TerminalColors.claudeOrange)
+                .frame(width: 14, alignment: .center)
+            Text("Working\(dots)")
+                .font(.system(size: 13, weight: .medium).italic())
+                .foregroundColor(TerminalColors.claudeOrange)
+        }
+        .padding(.vertical, 6)
+        .onReceive(dotsTimer) { _ in
+            dotCount = (dotCount % 3) + 1
+        }
+        .onReceive(symbolTimer) { _ in
+            symbolPhase = (symbolPhase + 1) % symbols.count
+        }
     }
 }

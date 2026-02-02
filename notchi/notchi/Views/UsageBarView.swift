@@ -8,13 +8,10 @@ struct UsageBarView: View {
 
     private var usageColor: Color {
         guard let usage else { return TerminalColors.dimmedText }
-        let percentage = usage.usagePercentage
-        if percentage < 50 {
-            return TerminalColors.green
-        } else if percentage < 80 {
-            return TerminalColors.amber
-        } else {
-            return TerminalColors.red
+        switch usage.usagePercentage {
+        case ..<50: return TerminalColors.green
+        case ..<80: return TerminalColors.amber
+        default: return TerminalColors.red
         }
     }
 
@@ -29,9 +26,26 @@ struct UsageBarView: View {
     private var connectedView: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text("Claude Usage")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(TerminalColors.secondaryText)
+                if let usage, let resetTime = usage.formattedResetTime {
+                    Text("Resets in \(resetTime)")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(TerminalColors.secondaryText)
+                } else if let error {
+                    Button(action: onSettingsTap) {
+                        HStack(spacing: 4) {
+                            Text(error)
+                            Text("– Tap to fix")
+                                .foregroundColor(TerminalColors.secondaryText)
+                        }
+                        .font(.system(size: 10))
+                        .foregroundColor(TerminalColors.red)
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    Text("Claude Usage")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(TerminalColors.secondaryText)
+                }
                 Spacer()
                 if isLoading {
                     ProgressView()
@@ -44,25 +58,8 @@ struct UsageBarView: View {
             }
 
             progressBar
-
-            if let usage, let resetTime = usage.formattedResetTime {
-                Text("Resets in \(resetTime)")
-                    .font(.system(size: 10))
-                    .foregroundColor(TerminalColors.dimmedText)
-            } else if let error {
-                Button(action: onSettingsTap) {
-                    HStack(spacing: 4) {
-                        Text(error)
-                        Text("– Tap to fix")
-                            .foregroundColor(TerminalColors.secondaryText)
-                    }
-                    .font(.system(size: 10))
-                    .foregroundColor(TerminalColors.red)
-                }
-                .buttonStyle(.plain)
-            }
         }
-        .padding(.bottom, 12)
+        .padding(.top, 12)
     }
 
     private var progressBar: some View {
@@ -97,6 +94,6 @@ struct UsageBarView: View {
             .cornerRadius(6)
         }
         .buttonStyle(.plain)
-        .padding(.bottom, 12)
+        .padding(.top, 12)
     }
 }

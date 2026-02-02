@@ -23,6 +23,7 @@ final class NotchiStateMachine {
 
     func handleEvent(_ event: HookEvent) {
         cancelSleepTimer()
+        stats.updateProcessingState(status: event.status)
 
         switch event.event {
         case "SessionStart":

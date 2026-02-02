@@ -14,6 +14,48 @@ struct SessionEvent: Identifiable {
     var status: ToolStatus
     let toolInput: [String: Any]?
     let toolUseId: String?
+    let description: String?
+}
+
+extension SessionEvent {
+    static func deriveDescription(tool: String?, toolInput: [String: Any]?) -> String? {
+        guard let tool, let input = toolInput else { return nil }
+
+        switch tool {
+        case "Read":
+            if let path = input["file_path"] as? String { return "Reading \(path)" }
+        case "Write":
+            if let path = input["file_path"] as? String { return "Writing \(path)" }
+        case "Edit":
+            if let path = input["file_path"] as? String { return "Editing \(path)" }
+        case "Bash":
+            if let command = input["command"] as? String {
+                return command
+            }
+        case "Grep":
+            if let pattern = input["pattern"] as? String {
+                return "Searching: \(pattern)"
+            }
+        case "Glob":
+            if let pattern = input["pattern"] as? String {
+                return "Finding: \(pattern)"
+            }
+        case "Task":
+            if let desc = input["description"] as? String {
+                return desc
+            }
+        default:
+            break
+        }
+
+        for (_, value) in input {
+            if let str = value as? String, !str.isEmpty {
+                return str
+            }
+        }
+
+        return nil
+    }
 }
 
 @MainActor
@@ -23,19 +65,26 @@ final class SessionStats {
     var eventCount: Int = 0
     var recentEvents: [SessionEvent] = []
     private(set) var formattedDuration: String = "0m 00s"
+    private(set) var isProcessing: Bool = false
 
     private var durationTimer: Task<Void, Never>?
     private static let maxEvents = 20
 
+    func updateProcessingState(status: String) {
+        isProcessing = status != "waiting_for_input"
+    }
+
     func recordPreToolUse(tool: String?, toolInput: [String: Any]?, toolUseId: String?) {
         eventCount += 1
+        let description = SessionEvent.deriveDescription(tool: tool, toolInput: toolInput)
         let event = SessionEvent(
             timestamp: Date(),
             type: "PreToolUse",
             tool: tool,
             status: .running,
             toolInput: toolInput,
-            toolUseId: toolUseId
+            toolUseId: toolUseId,
+            description: description
         )
         recentEvents.append(event)
         trimEvents()
@@ -54,7 +103,8 @@ final class SessionStats {
                 tool: tool,
                 status: success ? .success : .error,
                 toolInput: nil,
-                toolUseId: toolUseId
+                toolUseId: toolUseId,
+                description: nil
             )
             recentEvents.append(event)
             trimEvents()
@@ -72,6 +122,7 @@ final class SessionStats {
         eventCount = 0
         recentEvents = []
         formattedDuration = "0m 00s"
+        isProcessing = true
         startDurationTimer()
     }
 
@@ -79,6 +130,7 @@ final class SessionStats {
         durationTimer?.cancel()
         durationTimer = nil
         sessionStartTime = nil
+        isProcessing = false
     }
 
     private func startDurationTimer() {

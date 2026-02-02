@@ -12,17 +12,9 @@ struct ExpandedPanelView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            UsageBarView(
-                usage: usageService.currentUsage,
-                isLoading: usageService.isLoading,
-                error: usageService.error,
-                onSettingsTap: onSettingsTap
-            )
             headerSection
-            Divider().background(Color.white.opacity(0.08))
-            statsSection
 
-            if !stats.recentEvents.isEmpty {
+            if !stats.recentEvents.isEmpty || stats.isProcessing {
                 Divider().background(Color.white.opacity(0.08))
                 activitySection
             }
@@ -30,6 +22,15 @@ struct ExpandedPanelView: View {
             if stats.sessionStartTime == nil && stats.recentEvents.isEmpty {
                 emptyState
             }
+
+            Spacer()
+
+            UsageBarView(
+                usage: usageService.currentUsage,
+                isLoading: usageService.isLoading,
+                error: usageService.error,
+                onSettingsTap: onSettingsTap
+            )
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -50,12 +51,8 @@ struct ExpandedPanelView: View {
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isWorking)
     }
 
-    private var statsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            statRow(label: "Duration", value: stats.formattedDuration)
-            statRow(label: "Events", value: "\(stats.eventCount) tool uses")
-        }
-        .padding(.vertical, 16)
+    private var completedEvents: [SessionEvent] {
+        stats.recentEvents.filter { $0.status != .running }
     }
 
     private var activitySection: some View {
@@ -66,13 +63,14 @@ struct ExpandedPanelView: View {
                 .padding(.top, 16)
                 .padding(.bottom, 8)
 
-            ZStack {
+            ZStack(alignment: .top) {
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 0) {
-                        ForEach(stats.recentEvents.reversed()) { event in
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(completedEvents) { event in
                             ActivityRowView(event: event)
                         }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .frame(maxHeight: 200)
 
@@ -82,6 +80,11 @@ struct ExpandedPanelView: View {
                     fadeGradient(direction: .bottom)
                 }
                 .allowsHitTesting(false)
+            }
+
+            if isWorking {
+                WorkingIndicatorView()
+                    .padding(.top, 4)
             }
         }
     }
@@ -97,18 +100,6 @@ struct ExpandedPanelView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 40)
-    }
-
-    private func statRow(label: String, value: String) -> some View {
-        HStack {
-            Text(label)
-                .font(.system(size: 13))
-                .foregroundColor(TerminalColors.secondaryText)
-            Spacer()
-            Text(value)
-                .font(.system(size: 13, weight: .medium, design: .monospaced))
-                .foregroundColor(TerminalColors.primaryText)
-        }
     }
 
     private func fadeGradient(direction: Edge) -> some View {
