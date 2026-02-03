@@ -20,6 +20,7 @@ struct NotchContentView: View {
     var panelManager: NotchPanelManager = .shared
     var usageService: ClaudeUsageService = .shared
     @State private var bobOffset: CGFloat = 0
+    @State private var showingPanelSettings = false
 
     private var notchSize: CGSize { panelManager.notchSize }
     private var isExpanded: Bool { panelManager.isExpanded }
@@ -59,7 +60,7 @@ struct NotchContentView: View {
                 GrassIslandView(state: stateMachine.currentState)
                     .frame(height: grassHeight)
                     .drawingGroup()
-                    .opacity(isExpanded ? 1 : 0)
+                    .opacity(isExpanded && !showingPanelSettings ? 1 : 0)
             }
         }
         .clipShape(NotchShape(
@@ -81,35 +82,76 @@ struct NotchContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .notchiShouldCollapse)) { _ in
             panelManager.collapse()
         }
+        .onChange(of: isExpanded) { _, expanded in
+            if !expanded {
+                showingPanelSettings = false
+            }
+        }
     }
 
     @ViewBuilder
     private var notchLayout: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            headerRow
-                .frame(height: notchSize.height)
+        ZStack(alignment: .topTrailing) {
+            VStack(alignment: .leading, spacing: 0) {
+                headerRow
+                    .frame(height: notchSize.height)
+
+                if isExpanded {
+                    ExpandedPanelView(
+                        state: stateMachine.currentState,
+                        stats: stateMachine.stats,
+                        usageService: usageService,
+                        showingSettings: $showingPanelSettings,
+                        onSettingsTap: { openSettings() }
+                    )
+                    .frame(
+                        width: NotchConstants.expandedPanelSize.width - 48,
+                        height: NotchConstants.expandedPanelSize.height - notchSize.height - 24
+                    )
+                    .transition(
+                        .asymmetric(
+                            insertion: .scale(scale: 0.8, anchor: .top)
+                                .combined(with: .opacity)
+                                .animation(.smooth(duration: 0.35)),
+                            removal: .opacity.animation(.easeOut(duration: 0.15))
+                        )
+                    )
+                }
+            }
 
             if isExpanded {
-                ExpandedPanelView(
-                    state: stateMachine.currentState,
-                    stats: stateMachine.stats,
-                    usageService: usageService,
-                    onSettingsTap: { openSettings() }
-                )
-                .frame(
-                    width: NotchConstants.expandedPanelSize.width - 48,
-                    height: NotchConstants.expandedPanelSize.height - notchSize.height - 24
-                )
-                .transition(
-                    .asymmetric(
-                        insertion: .scale(scale: 0.8, anchor: .top)
-                            .combined(with: .opacity)
-                            .animation(.smooth(duration: 0.35)),
-                        removal: .opacity.animation(.easeOut(duration: 0.15))
-                    )
-                )
+                HStack {
+                    if showingPanelSettings {
+                        backButton
+                    }
+                    Spacer()
+                    headerButtons
+                }
+                .padding(.top, 8)
+                .padding(.horizontal, 8)
+                .frame(width: NotchConstants.expandedPanelSize.width - 48)
             }
         }
+    }
+
+    private var headerButtons: some View {
+        HStack(spacing: 10) {
+            PanelHeaderButton(sfSymbol: "gearshape", action: { showingPanelSettings = true })
+            PanelHeaderButton(sfSymbol: "xmark", action: { panelManager.collapse() })
+        }
+    }
+
+    private var backButton: some View {
+        Button(action: { showingPanelSettings = false }) {
+            HStack(spacing: 5) {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 11, weight: .semibold))
+                Text("Back")
+                    .font(.system(size: 12, weight: .medium))
+            }
+            .foregroundColor(.white.opacity(0.7))
+        }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder

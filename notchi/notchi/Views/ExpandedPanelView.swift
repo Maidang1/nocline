@@ -4,6 +4,7 @@ struct ExpandedPanelView: View {
     let state: NotchiState
     let stats: SessionStats
     let usageService: ClaudeUsageService
+    @Binding var showingSettings: Bool
     let onSettingsTap: () -> Void
 
     private var showIndicator: Bool {
@@ -12,34 +13,46 @@ struct ExpandedPanelView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            VStack(alignment: .leading, spacing: 0) {
-                Spacer()
-                    .frame(height: geometry.size.height * 0.3)
-
-                VStack(alignment: .leading, spacing: 0) {
-                    if !stats.recentEvents.isEmpty || stats.isProcessing {
-                        Divider().background(Color.white.opacity(0.08))
-                        activitySection
-                    }
-
-                    if stats.sessionStartTime == nil && stats.recentEvents.isEmpty {
-                        Spacer()
-                        emptyState
-                        Spacer()
-                    }
-
-                    UsageBarView(
-                        usage: usageService.currentUsage,
-                        isLoading: usageService.isLoading,
-                        error: usageService.error,
-                        onSettingsTap: onSettingsTap
-                    )
-                }
-                .padding(.horizontal, 12)
+            if showingSettings {
+                PanelSettingsView()
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+            } else {
+                activityContent(geometry: geometry)
+                    .transition(.move(edge: .leading).combined(with: .opacity))
             }
-            .padding(.bottom, 8)
-            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
+        .animation(.easeInOut(duration: 0.25), value: showingSettings)
+    }
+
+    @ViewBuilder
+    private func activityContent(geometry: GeometryProxy) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Spacer()
+                .frame(height: geometry.size.height * 0.3)
+
+            VStack(alignment: .leading, spacing: 0) {
+                if !stats.recentEvents.isEmpty || stats.isProcessing {
+                    Divider().background(Color.white.opacity(0.08))
+                    activitySection
+                }
+
+                if stats.sessionStartTime == nil && stats.recentEvents.isEmpty {
+                    Spacer()
+                    emptyState
+                    Spacer()
+                }
+
+                UsageBarView(
+                    usage: usageService.currentUsage,
+                    isLoading: usageService.isLoading,
+                    error: usageService.error,
+                    onSettingsTap: onSettingsTap
+                )
+            }
+            .padding(.horizontal, 12)
+        }
+        .padding(.bottom, 8)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
     private var activitySection: some View {
@@ -105,5 +118,26 @@ struct ExpandedPanelView: View {
                 .foregroundColor(TerminalColors.dimmedText)
         }
         .frame(maxWidth: .infinity)
+    }
+}
+
+struct PanelHeaderButton: View {
+    let sfSymbol: String
+    let action: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: sfSymbol)
+                .font(.system(size: 16, weight: .medium))
+                .foregroundColor(.white.opacity(0.7))
+                .frame(width: 32, height: 32)
+                .background(isHovered ? TerminalColors.hoverBackground : TerminalColors.subtleBackground)
+                .clipShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            isHovered = hovering
+        }
     }
 }
