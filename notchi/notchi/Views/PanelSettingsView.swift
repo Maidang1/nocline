@@ -14,8 +14,10 @@ struct PanelSettingsView: View {
                     quitSection
                 }
             }
+            .scrollIndicators(.hidden)
         }
         .padding(.horizontal, 12)
+        .padding(.top, 10)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
@@ -69,13 +71,18 @@ struct PanelSettingsView: View {
                 trailing: AnyView(versionText)
             )
 
-            SettingsRowView(
-                icon: "star",
-                title: "Star on GitHub",
-                trailing: AnyView(Image(systemName: "arrow.up.right")
-                    .font(.system(size: 10))
-                    .foregroundColor(TerminalColors.dimmedText))
-            )
+            Button(action: {
+                NSWorkspace.shared.open(URL(string: "https://github.com/sk-ruban/notchi")!)
+            }) {
+                SettingsRowView(
+                    icon: "star",
+                    title: "Star on GitHub",
+                    trailing: AnyView(Image(systemName: "arrow.up.right")
+                        .font(.system(size: 10))
+                        .foregroundColor(TerminalColors.dimmedText))
+                )
+            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -156,4 +163,10 @@ struct SettingsRowView: View {
         }
         .padding(.vertical, 4)
     }
+}
+
+#Preview {
+    PanelSettingsView()
+        .frame(width: 402, height: 400)
+        .background(Color.black)
 }

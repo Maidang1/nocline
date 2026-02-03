@@ -123,6 +123,7 @@ struct NotchContentView: View {
                 HStack {
                     if showingPanelSettings {
                         backButton
+                            .padding(.leading, 15)
                     }
                     Spacer()
                     headerButtons
