@@ -41,6 +41,7 @@ final class NotchiStateMachine {
 
         case "Stop", "SubagentStop":
             transition(to: .happy)
+            SoundService.shared.playNotificationSound()
 
         case "SessionEnd":
             stats.endSession()
@@ -49,6 +50,7 @@ final class NotchiStateMachine {
         default:
             if isDone && currentState != .idle {
                 transition(to: .happy)
+                SoundService.shared.playNotificationSound()
             }
         }
 
