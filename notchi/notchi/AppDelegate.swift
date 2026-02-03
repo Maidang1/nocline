@@ -28,10 +28,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func setupNotchWindow() {
         let screen = NSScreen.builtInOrMain
-        let notchSize = screen.notchSize
-        let screenFrame = screen.frame
+        NotchPanelManager.shared.updateGeometry(for: screen)
 
-        // Full-width window at top of screen
+        let screenFrame = screen.frame
         let windowHeight: CGFloat = 500
         let frame = NSRect(
             x: screenFrame.origin.x,
@@ -41,38 +40,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
 
         let panel = NotchPanel(frame: frame)
-
-        // Configure panel manager with hit areas (in screen coordinates)
-        let notchCenterX = screenFrame.origin.x + screenFrame.width / 2
-        let sideWidth = max(0, notchSize.height - 12) + 24
-        let notchTotalWidth = notchSize.width + sideWidth
-
-        // Notch clickable area (screen coordinates)
-        let notchRect = CGRect(
-            x: notchCenterX - notchTotalWidth / 2,
-            y: screenFrame.maxY - notchSize.height,
-            width: notchTotalWidth,
-            height: notchSize.height
-        )
-
-        // Expanded panel area (screen coordinates)
-        let panelSize = NotchConstants.expandedPanelSize
-        let panelWidth = panelSize.width + NotchConstants.expandedPanelHorizontalPadding
-        let panelRect = CGRect(
-            x: notchCenterX - panelWidth / 2,
-            y: screenFrame.maxY - panelSize.height,
-            width: panelWidth,
-            height: panelSize.height
-        )
-
-        NotchPanelManager.shared.configure(
-            notchRect: notchRect,
-            panelRect: panelRect,
-            screenHeight: screenFrame.height
-        )
         NotchPanelManager.shared.panel = panel
 
-        let contentView = NotchContentView(notchSize: notchSize)
+        let contentView = NotchContentView()
         let hostingView = NSHostingView(rootView: contentView)
         panel.contentView = hostingView
         panel.orderFrontRegardless()
@@ -92,6 +62,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func repositionWindow() {
         guard let panel = notchPanel else { return }
         let screen = NSScreen.builtInOrMain
+
+        // Recalculate notch geometry for new screen config
+        NotchPanelManager.shared.updateGeometry(for: screen)
+
         let screenFrame = screen.frame
         let windowHeight: CGFloat = 500
         let frame = NSRect(

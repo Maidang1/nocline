@@ -16,12 +16,12 @@ private let cornerRadiusInsets = (
 )
 
 struct NotchContentView: View {
-    let notchSize: CGSize
     var stateMachine: NotchiStateMachine = .shared
     var panelManager: NotchPanelManager = .shared
     var usageService: ClaudeUsageService = .shared
     @State private var bobOffset: CGFloat = 0
 
+    private var notchSize: CGSize { panelManager.notchSize }
     private var isExpanded: Bool { panelManager.isExpanded }
 
     private var panelAnimation: Animation {
@@ -145,6 +145,6 @@ struct NotchContentView: View {
 }
 
 #Preview {
-    NotchContentView(notchSize: CGSize(width: 180, height: 32))
+    NotchContentView()
         .frame(width: 400, height: 200)
 }

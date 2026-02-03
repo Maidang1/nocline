@@ -6,6 +6,7 @@ final class NotchPanelManager {
     static let shared = NotchPanelManager()
 
     private(set) var isExpanded = false
+    private(set) var notchSize: CGSize = .zero
     weak var panel: NSPanel?
 
     private var notchRect: CGRect = .zero
@@ -18,10 +19,33 @@ final class NotchPanelManager {
         setupEventMonitors()
     }
 
-    func configure(notchRect: CGRect, panelRect: CGRect, screenHeight: CGFloat) {
-        self.notchRect = notchRect
-        self.panelRect = panelRect
-        self.screenHeight = screenHeight
+    func updateGeometry(for screen: NSScreen) {
+        let newNotchSize = screen.notchSize
+        let screenFrame = screen.frame
+
+        notchSize = newNotchSize
+
+        let notchCenterX = screenFrame.origin.x + screenFrame.width / 2
+        let sideWidth = max(0, newNotchSize.height - 12) + 24
+        let notchTotalWidth = newNotchSize.width + sideWidth
+
+        notchRect = CGRect(
+            x: notchCenterX - notchTotalWidth / 2,
+            y: screenFrame.maxY - newNotchSize.height,
+            width: notchTotalWidth,
+            height: newNotchSize.height
+        )
+
+        let panelSize = NotchConstants.expandedPanelSize
+        let panelWidth = panelSize.width + NotchConstants.expandedPanelHorizontalPadding
+        panelRect = CGRect(
+            x: notchCenterX - panelWidth / 2,
+            y: screenFrame.maxY - panelSize.height,
+            width: panelWidth,
+            height: panelSize.height
+        )
+
+        screenHeight = screenFrame.height
     }
 
     private func setupEventMonitors() {
