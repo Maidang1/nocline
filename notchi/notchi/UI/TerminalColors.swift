@@ -5,6 +5,7 @@ struct TerminalColors {
     static let amber = Color(red: 1.0, green: 0.7, blue: 0.0)
     static let red = Color(red: 1.0, green: 0.3, blue: 0.3)
     static let claudeOrange = Color(red: 0.85, green: 0.47, blue: 0.34)
+    static let iMessageBlue = Color(red: 0, green: 0.478, blue: 1)
 
     static let primaryText = Color.white.opacity(0.9)
     static let secondaryText = Color.white.opacity(0.5)

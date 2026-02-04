@@ -11,7 +11,7 @@ struct UserPromptBubbleView: View {
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 18)
-                    .fill(Color.white.opacity(0.15))
+                    .fill(TerminalColors.iMessageBlue)
             )
     }
 }
