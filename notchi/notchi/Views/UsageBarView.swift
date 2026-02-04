@@ -59,7 +59,7 @@ struct UsageBarView: View {
 
             progressBar
         }
-        .padding(.top, 12)
+        .padding(.top, 5)
     }
 
     private var progressBar: some View {
@@ -94,6 +94,6 @@ struct UsageBarView: View {
             .cornerRadius(6)
         }
         .buttonStyle(.plain)
-        .padding(.top, 12)
+        .padding(.top, 5)
     }
 }

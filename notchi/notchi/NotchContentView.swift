@@ -136,10 +136,11 @@ struct NotchContentView: View {
     }
 
     private var headerButtons: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 6) {
             PanelHeaderButton(sfSymbol: "gearshape", action: { showingPanelSettings = true })
             PanelHeaderButton(sfSymbol: "xmark", action: { panelManager.collapse() })
         }
+        .padding(.trailing, 3)
     }
 
     private var backButton: some View {

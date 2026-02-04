@@ -67,40 +67,32 @@ struct ExpandedPanelView: View {
             Text("Activity")
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(TerminalColors.secondaryText)
-                .padding(.top, 16)
-                .padding(.bottom, 8)
+                .padding(.top, 12)
+                .padding(.bottom, 5)
 
-            ZStack(alignment: .top) {
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 0) {
-                            ForEach(stats.recentEvents) { event in
-                                ActivityRowView(event: event)
-                                    .id(event.id)
-                            }
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(stats.recentEvents) { event in
+                            ActivityRowView(event: event)
+                                .id(event.id)
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .frame(maxHeight: 200)
-                    .onAppear {
-                        if let id = stats.recentEvents.last?.id {
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(maxHeight: 200)
+                .onAppear {
+                    if let id = stats.recentEvents.last?.id {
+                        proxy.scrollTo(id, anchor: .bottom)
+                    }
+                }
+                .onChange(of: stats.recentEvents.last?.id) { _, newId in
+                    if let id = newId {
+                        withAnimation(.easeOut(duration: 0.2)) {
                             proxy.scrollTo(id, anchor: .bottom)
                         }
                     }
-                    .onChange(of: stats.recentEvents.last?.id) { _, newId in
-                        if let id = newId {
-                            withAnimation(.easeOut(duration: 0.2)) {
-                                proxy.scrollTo(id, anchor: .bottom)
-                            }
-                        }
-                    }
                 }
-
-                VStack {
-                    topFadeGradient
-                    Spacer()
-                }
-                .allowsHitTesting(false)
             }
 
             if showIndicator {
@@ -108,11 +100,6 @@ struct ExpandedPanelView: View {
                     .padding(.top, 4)
             }
         }
-    }
-
-    private var topFadeGradient: some View {
-        LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
-            .frame(height: 16)
     }
 
     private var emptyState: some View {
