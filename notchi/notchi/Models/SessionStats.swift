@@ -17,6 +17,12 @@ enum ToolStatus {
     case error
 }
 
+struct AssistantMessage: Identifiable {
+    let id: String
+    let text: String
+    let timestamp: Date
+}
+
 struct SessionEvent: Identifiable {
     let id = UUID()
     let timestamp: Date
@@ -79,8 +85,14 @@ final class SessionStats {
     private(set) var isProcessing: Bool = false
     private(set) var lastUserPrompt: String?
 
+    // Assistant message storage
+    private(set) var recentAssistantMessages: [AssistantMessage] = []
+    private(set) var currentSessionId: String?
+    private(set) var currentCwd: String?
+
     private var durationTimer: Task<Void, Never>?
     private static let maxEvents = 20
+    private static let maxAssistantMessages = 10
 
     func updateProcessingState(status: String) {
         isProcessing = status != "waiting_for_input"
@@ -133,10 +145,27 @@ final class SessionStats {
         lastUserPrompt = text.truncatedForPrompt()
     }
 
+    func clearAssistantMessages() {
+        recentAssistantMessages = []
+    }
+
+    func recordSessionInfo(sessionId: String, cwd: String) {
+        currentSessionId = sessionId
+        currentCwd = cwd
+    }
+
+    func recordAssistantMessages(_ messages: [AssistantMessage]) {
+        recentAssistantMessages.append(contentsOf: messages)
+        while recentAssistantMessages.count > Self.maxAssistantMessages {
+            recentAssistantMessages.removeFirst()
+        }
+    }
+
     func startSession() {
         sessionStartTime = Date()
         eventCount = 0
         recentEvents = []
+        recentAssistantMessages = []
         formattedDuration = "0m 00s"
         isProcessing = true
         lastUserPrompt = nil

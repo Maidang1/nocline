@@ -1,5 +1,24 @@
 import SwiftUI
 
+enum ActivityItem: Identifiable {
+    case tool(SessionEvent)
+    case assistant(AssistantMessage)
+
+    var id: String {
+        switch self {
+        case .tool(let event): return "tool-\(event.id.uuidString)"
+        case .assistant(let msg): return "assistant-\(msg.id)"
+        }
+    }
+
+    var timestamp: Date {
+        switch self {
+        case .tool(let event): return event.timestamp
+        case .assistant(let msg): return msg.timestamp
+        }
+    }
+}
+
 struct ExpandedPanelView: View {
     let state: NotchiState
     let stats: SessionStats
@@ -17,7 +36,13 @@ struct ExpandedPanelView: View {
     }
 
     private var hasActivity: Bool {
-        !stats.recentEvents.isEmpty || stats.isProcessing || showIndicator || stats.lastUserPrompt != nil
+        !stats.recentEvents.isEmpty || !stats.recentAssistantMessages.isEmpty || stats.isProcessing || showIndicator || stats.lastUserPrompt != nil
+    }
+
+    private var unifiedActivityItems: [ActivityItem] {
+        let toolItems = stats.recentEvents.map { ActivityItem.tool($0) }
+        let messageItems = stats.recentAssistantMessages.map { ActivityItem.assistant($0) }
+        return (toolItems + messageItems).sorted { $0.timestamp < $1.timestamp }
     }
 
     var body: some View {
@@ -79,20 +104,26 @@ struct ExpandedPanelView: View {
                                 .padding(.bottom, 8)
                         }
 
-                        ForEach(stats.recentEvents) { event in
-                            ActivityRowView(event: event)
-                                .id(event.id)
+                        ForEach(unifiedActivityItems) { item in
+                            switch item {
+                            case .tool(let event):
+                                ActivityRowView(event: event)
+                                    .id(item.id)
+                            case .assistant(let message):
+                                AssistantTextRowView(message: message)
+                                    .id(item.id)
+                            }
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .frame(maxHeight: 200)
                 .onAppear {
-                    if let id = stats.recentEvents.last?.id {
-                        proxy.scrollTo(id, anchor: .bottom)
+                    if let lastItem = unifiedActivityItems.last {
+                        proxy.scrollTo(lastItem.id, anchor: .bottom)
                     }
                 }
-                .onChange(of: stats.recentEvents.last?.id) { _, newId in
+                .onChange(of: unifiedActivityItems.last?.id) { _, newId in
                     if let id = newId {
                         withAnimation(.easeOut(duration: 0.2)) {
                             proxy.scrollTo(id, anchor: .bottom)

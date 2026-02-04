@@ -12,8 +12,10 @@ final class NotchiStateMachine {
     let stats = SessionStats()
 
     private var sleepTimer: Task<Void, Never>?
+    private var pendingSyncTask: Task<Void, Never>?
 
     private static let sleepDelay: Duration = .seconds(300)
+    private static let syncDebounce: Duration = .milliseconds(100)
 
     private init() {
         startSleepTimer()
@@ -22,6 +24,7 @@ final class NotchiStateMachine {
     func handleEvent(_ event: HookEvent) {
         cancelSleepTimer()
         stats.updateProcessingState(status: event.status)
+        stats.recordSessionInfo(sessionId: event.sessionId, cwd: event.cwd)
 
         let isDone = event.status == "waiting_for_input"
 
@@ -30,6 +33,14 @@ final class NotchiStateMachine {
             if let prompt = event.userPrompt {
                 stats.recordUserPrompt(prompt)
             }
+            // Mark current file position so only NEW responses after this prompt are shown
+            Task {
+                await ConversationParser.shared.markCurrentPosition(
+                    sessionId: event.sessionId,
+                    cwd: event.cwd
+                )
+            }
+            stats.clearAssistantMessages()
             transition(to: .thinking)
 
         case "PreCompact":
@@ -54,10 +65,12 @@ final class NotchiStateMachine {
         case "PostToolUse":
             let success = event.status != "error"
             stats.recordPostToolUse(tool: event.tool, toolUseId: event.toolUseId, success: success)
+            scheduleFileSync(sessionId: event.sessionId, cwd: event.cwd)
 
         case "Stop":
             transition(to: .happy)
             SoundService.shared.playNotificationSound()
+            scheduleFileSync(sessionId: event.sessionId, cwd: event.cwd)
 
         case "SubagentStop":
             transition(to: .happy)
@@ -93,5 +106,23 @@ final class NotchiStateMachine {
     private func cancelSleepTimer() {
         sleepTimer?.cancel()
         sleepTimer = nil
+    }
+
+    private func scheduleFileSync(sessionId: String, cwd: String) {
+        pendingSyncTask?.cancel()
+        pendingSyncTask = Task {
+            try? await Task.sleep(for: Self.syncDebounce)
+            guard !Task.isCancelled else { return }
+
+            let messages = await ConversationParser.shared.parseIncremental(
+                sessionId: sessionId,
+                cwd: cwd
+            )
+
+            // Only record if session is still current
+            if !messages.isEmpty && stats.currentSessionId == sessionId {
+                stats.recordAssistantMessages(messages)
+            }
+        }
     }
 }
