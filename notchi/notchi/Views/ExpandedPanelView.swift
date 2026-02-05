@@ -154,10 +154,8 @@ struct ExpandedPanelView: View {
 
                 Spacer()
 
-                if let session = effectiveSession {
-                    Text(session.formattedDuration)
-                        .font(.system(size: 10, weight: .medium).monospacedDigit())
-                        .foregroundColor(TerminalColors.dimmedText)
+                if let mode = effectiveSession?.currentModeDisplay {
+                    ModeBadgeView(mode: mode)
                 }
             }
             .padding(.top, 12)
@@ -238,5 +236,15 @@ struct PanelHeaderButton: View {
         .onHover { hovering in
             isHovered = hovering
         }
+    }
+}
+
+struct ModeBadgeView: View {
+    let mode: String
+
+    var body: some View {
+        Text(mode)
+            .font(.system(size: 11, weight: .medium))
+            .foregroundColor(TerminalColors.secondaryText)
     }
 }

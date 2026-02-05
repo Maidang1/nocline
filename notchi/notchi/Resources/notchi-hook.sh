@@ -37,7 +37,8 @@ output = {
     'event': hook_event,
     'status': input_data.get('status', status_map.get(hook_event, 'unknown')),
     'pid': None,
-    'tty': None
+    'tty': None,
+    'permission_mode': input_data.get('permission_mode', 'default')
 }
 
 # Pass user prompt directly for UserPromptSubmit

@@ -15,6 +15,7 @@ final class SessionData: Identifiable {
     private(set) var recentAssistantMessages: [AssistantMessage] = []
     private(set) var lastUserPrompt: String?
     private(set) var promptSubmitTime: Date?
+    private(set) var permissionMode: String = "default"
 
     private var durationTimer: Task<Void, Never>?
     private(set) var formattedDuration: String = "0m 00s"
@@ -24,6 +25,16 @@ final class SessionData: Identifiable {
 
     var projectName: String {
         (cwd as NSString).lastPathComponent
+    }
+
+    var currentModeDisplay: String? {
+        switch permissionMode {
+        case "plan": return "Plan Mode"
+        case "acceptEdits": return "Accept Edits"
+        case "dontAsk": return "Don't Ask"
+        case "bypassPermissions": return "Bypass"
+        default: return nil
+        }
     }
 
     var displayTitle: String {
@@ -69,6 +80,10 @@ final class SessionData: Identifiable {
         lastUserPrompt = prompt.truncatedForPrompt()
         promptSubmitTime = now
         lastActivity = now
+    }
+
+    func updatePermissionMode(_ mode: String) {
+        permissionMode = mode
     }
 
     func recordPreToolUse(tool: String?, toolInput: [String: Any]?, toolUseId: String?) {

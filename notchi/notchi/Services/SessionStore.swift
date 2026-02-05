@@ -55,6 +55,10 @@ final class SessionStore {
         let isProcessing = event.status != "waiting_for_input"
         session.updateProcessingState(isProcessing: isProcessing)
 
+        if let mode = event.permissionMode {
+            session.updatePermissionMode(mode)
+        }
+
         switch event.event {
         case "UserPromptSubmit":
             if let prompt = event.userPrompt {
