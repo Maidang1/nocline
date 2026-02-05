@@ -6,8 +6,13 @@ struct UsageBarView: View {
     let error: String?
     let onSettingsTap: () -> Void
 
+    private var isStale: Bool {
+        error != nil && usage != nil
+    }
+
     private var usageColor: Color {
         guard let usage else { return TerminalColors.dimmedText }
+        if isStale { return TerminalColors.dimmedText }
         switch usage.usagePercentage {
         case ..<50: return TerminalColors.green
         case ..<80: return TerminalColors.amber
@@ -26,11 +31,7 @@ struct UsageBarView: View {
     private var connectedView: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                if let usage, let resetTime = usage.formattedResetTime {
-                    Text("Resets in \(resetTime)")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(TerminalColors.secondaryText)
-                } else if let error {
+                if let error, usage == nil {
                     Button(action: onSettingsTap) {
                         HStack(spacing: 4) {
                             Text(error)
@@ -41,6 +42,17 @@ struct UsageBarView: View {
                         .foregroundColor(TerminalColors.red)
                     }
                     .buttonStyle(.plain)
+                } else if let usage, let resetTime = usage.formattedResetTime {
+                    HStack(spacing: 4) {
+                        Text("Resets in \(resetTime)")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(TerminalColors.secondaryText)
+                        if isStale {
+                            Text("(cached)")
+                                .font(.system(size: 10))
+                                .foregroundColor(TerminalColors.dimmedText)
+                        }
+                    }
                 } else {
                     Text("Claude Usage")
                         .font(.system(size: 11, weight: .medium))
