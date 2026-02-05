@@ -1,6 +1,9 @@
+import ServiceManagement
 import SwiftUI
 
 struct PanelSettingsView: View {
+    @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ScrollView {
@@ -35,47 +38,42 @@ struct PanelSettingsView: View {
 
     private var togglesSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SettingsRowView(
-                icon: "power",
-                title: "Launch at Login",
-                trailing: AnyView(toggleIndicator(false))
-            )
+            Button(action: toggleLaunchAtLogin) {
+                SettingsRowView(icon: "power", title: "Launch at Login") {
+                    ToggleSwitch(isOn: launchAtLogin)
+                }
+            }
+            .buttonStyle(.plain)
 
-            SettingsRowView(
-                icon: "terminal",
-                title: "Hooks",
-                trailing: AnyView(statusBadge("Installed", color: TerminalColors.green))
-            )
+            SettingsRowView(icon: "terminal", title: "Hooks") {
+                statusBadge("Installed", color: TerminalColors.green)
+            }
 
-            SettingsRowView(
-                icon: "lock.shield",
-                title: "Accessibility",
-                trailing: AnyView(statusBadge("Granted", color: TerminalColors.green))
-            )
+            SettingsRowView(icon: "lock.shield", title: "Accessibility") {
+                statusBadge("Granted", color: TerminalColors.green)
+            }
         }
     }
 
     private var actionsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SettingsRowView(
-                icon: "arrow.triangle.2.circlepath",
-                title: "Check for Updates",
-                trailing: AnyView(versionText)
-            )
+            SettingsRowView(icon: "arrow.triangle.2.circlepath", title: "Check for Updates") {
+                versionText
+            }
 
-            Button(action: {
-                NSWorkspace.shared.open(URL(string: "https://github.com/sk-ruban/notchi")!)
-            }) {
-                SettingsRowView(
-                    icon: "star",
-                    title: "Star on GitHub",
-                    trailing: AnyView(Image(systemName: "arrow.up.right")
+            Button(action: openGitHubRepo) {
+                SettingsRowView(icon: "star", title: "Star on GitHub") {
+                    Image(systemName: "arrow.up.right")
                         .font(.system(size: 10))
-                        .foregroundColor(TerminalColors.dimmedText))
-                )
+                        .foregroundColor(TerminalColors.dimmedText)
+                }
             }
             .buttonStyle(.plain)
         }
+    }
+
+    private func openGitHubRepo() {
+        NSWorkspace.shared.open(URL(string: "https://github.com/sk-ruban/notchi")!)
     }
 
     private var quitSection: some View {
@@ -100,10 +98,17 @@ struct PanelSettingsView: View {
         .padding(.bottom, 8)
     }
 
-    private func toggleIndicator(_ isOn: Bool) -> some View {
-        Circle()
-            .fill(isOn ? TerminalColors.green : TerminalColors.dimmedText)
-            .frame(width: 8, height: 8)
+    private func toggleLaunchAtLogin() {
+        do {
+            if launchAtLogin {
+                try SMAppService.mainApp.unregister()
+            } else {
+                try SMAppService.mainApp.register()
+            }
+            launchAtLogin = SMAppService.mainApp.status == .enabled
+        } catch {
+            print("Failed to toggle launch at login: \(error)")
+        }
     }
 
     private func statusBadge(_ text: String, color: Color) -> some View {
@@ -123,10 +128,10 @@ struct PanelSettingsView: View {
     }
 }
 
-struct SettingsRowView: View {
+struct SettingsRowView<Trailing: View>: View {
     let icon: String
     let title: String
-    let trailing: AnyView
+    @ViewBuilder let trailing: () -> Trailing
 
     var body: some View {
         HStack {
@@ -141,10 +146,28 @@ struct SettingsRowView: View {
 
             Spacer()
 
-            trailing
+            trailing()
         }
         .padding(.vertical, 4)
         .contentShape(Rectangle())
+    }
+}
+
+struct ToggleSwitch: View {
+    let isOn: Bool
+
+    var body: some View {
+        ZStack(alignment: isOn ? .trailing : .leading) {
+            Capsule()
+                .fill(isOn ? TerminalColors.green : Color.white.opacity(0.15))
+                .frame(width: 32, height: 18)
+
+            Circle()
+                .fill(Color.white)
+                .frame(width: 14, height: 14)
+                .padding(2)
+        }
+        .animation(.easeInOut(duration: 0.15), value: isOn)
     }
 }
 
