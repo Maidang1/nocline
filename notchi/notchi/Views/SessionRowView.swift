@@ -1,0 +1,74 @@
+import SwiftUI
+
+struct SessionRowView: View {
+    let session: SessionData
+    let isSelected: Bool
+    let onTap: () -> Void
+    let onDelete: () -> Void
+
+    @State private var isRowHovered = false
+    @State private var isTrashHovered = false
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 10) {
+                stateIndicator
+                    .frame(width: 5, height: 5)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(session.displayTitle)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(TerminalColors.primaryText)
+                        .lineLimit(1)
+
+                    if let preview = session.activityPreview {
+                        Text(preview)
+                            .font(.system(size: 10))
+                            .foregroundColor(TerminalColors.dimmedText)
+                            .lineLimit(1)
+                    }
+                }
+
+                Spacer()
+
+                Button(action: onDelete) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 11))
+                        .foregroundColor(TerminalColors.dimmedText.opacity(isTrashHovered ? 1 : 0.8))
+                }
+                .buttonStyle(.plain)
+                .onHover { isTrashHovered = $0 }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .contentShape(Rectangle())
+            .background(isSelected || isRowHovered ? TerminalColors.hoverBackground : Color.clear)
+            .cornerRadius(6)
+        }
+        .buttonStyle(.plain)
+        .onHover { isRowHovered = $0 }
+    }
+
+    @ViewBuilder
+    private var stateIndicator: some View {
+        if session.isProcessing {
+            ProcessingSpinner()
+        } else {
+            Circle()
+                .fill(stateColor)
+        }
+    }
+
+    private var stateColor: Color {
+        switch session.state {
+        case .idle, .sleeping:
+            return TerminalColors.dimmedText
+        case .thinking, .working, .compacting:
+            return TerminalColors.amber
+        case .happy:
+            return TerminalColors.green
+        case .alert:
+            return TerminalColors.red
+        }
+    }
+}

@@ -19,9 +19,13 @@ struct NotchContentView: View {
     var stateMachine: NotchiStateMachine = .shared
     var panelManager: NotchPanelManager = .shared
     var usageService: ClaudeUsageService = .shared
-    @State private var bobOffset: CGFloat = 0
     @State private var showingPanelSettings = false
     @State private var showingCredentials = false
+    @State private var showingSessionActivity = false
+
+    private var sessionStore: SessionStore {
+        stateMachine.sessionStore
+    }
 
     private var notchSize: CGSize { panelManager.notchSize }
     private var isExpanded: Bool { panelManager.isExpanded }
@@ -49,6 +53,11 @@ struct NotchContentView: View {
         return expandedPanelHeight * 0.3 + notchSize.height
     }
 
+    private var shouldShowBackButton: Bool {
+        showingPanelSettings || showingCredentials ||
+        (sessionStore.activeSessionCount >= 2 && showingSessionActivity)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             notchLayout
@@ -74,12 +83,6 @@ struct NotchContentView: View {
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .animation(panelAnimation, value: isExpanded)
-        .onAppear {
-            startBobAnimation()
-        }
-        .onChange(of: stateMachine.currentState) {
-            restartBobAnimation()
-        }
         .onReceive(NotificationCenter.default.publisher(for: .notchiShouldCollapse)) { _ in
             panelManager.collapse()
         }
@@ -87,6 +90,12 @@ struct NotchContentView: View {
             if !expanded {
                 showingPanelSettings = false
                 showingCredentials = false
+                showingSessionActivity = false
+            }
+        }
+        .onChange(of: sessionStore.activeSessionCount) { _, count in
+            if count < 2 {
+                showingSessionActivity = false
             }
         }
     }
@@ -100,11 +109,11 @@ struct NotchContentView: View {
 
                 if isExpanded {
                     ExpandedPanelView(
-                        state: stateMachine.currentState,
-                        stats: stateMachine.stats,
+                        sessionStore: sessionStore,
                         usageService: usageService,
                         showingSettings: $showingPanelSettings,
                         showingCredentials: $showingCredentials,
+                        showingSessionActivity: $showingSessionActivity,
                         onSettingsTap: { openSettings() }
                     )
                     .frame(
@@ -124,7 +133,7 @@ struct NotchContentView: View {
 
             if isExpanded {
                 HStack {
-                    if showingPanelSettings || showingCredentials {
+                    if shouldShowBackButton {
                         backButton
                             .padding(.leading, 15)
                     }
@@ -164,6 +173,9 @@ struct NotchContentView: View {
             showingCredentials = false
         } else if showingPanelSettings {
             showingPanelSettings = false
+        } else if showingSessionActivity {
+            showingSessionActivity = false
+            sessionStore.selectSession(nil)
         }
     }
 
@@ -173,24 +185,50 @@ struct NotchContentView: View {
             Color.clear
                 .frame(width: notchSize.width - cornerRadiusInsets.closed.top)
 
-            Image(systemName: stateMachine.currentState.sfSymbolName)
-                .font(.system(size: 18))
-                .foregroundColor(.white)
-                .contentTransition(.symbolEffect(.replace))
-                .offset(x: 15,y: bobOffset - 2)
+            headerSprites
+                .offset(x: 15)
                 .frame(width: sideWidth)
         }
     }
 
-    private func startBobAnimation() {
-        withAnimation(.easeInOut(duration: stateMachine.currentState.bobDuration).repeatForever(autoreverses: true)) {
-            bobOffset = 3
+    @ViewBuilder
+    private var headerSprites: some View {
+        let sessions = sessionStore.sortedSessions
+        let maxVisibleSprites = 4
+
+        if sessions.isEmpty {
+            singleSprite(state: .idle, isSelected: true)
+        } else if sessions.count == 1, let session = sessions.first {
+            singleSprite(state: session.state, isSelected: true)
+        } else {
+            HStack(spacing: 4) {
+                ForEach(sessions.prefix(maxVisibleSprites)) { session in
+                    SessionSpriteView(
+                        state: session.state,
+                        isSelected: session.id == sessionStore.selectedSessionId,
+                        onTap: {
+                            sessionStore.selectSession(session.id)
+                            showingSessionActivity = true
+                        }
+                    )
+                }
+
+                if sessions.count > maxVisibleSprites {
+                    Text("+\(sessions.count - maxVisibleSprites)")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.white.opacity(0.5))
+                }
+            }
         }
     }
 
-    private func restartBobAnimation() {
-        bobOffset = 0
-        startBobAnimation()
+    @ViewBuilder
+    private func singleSprite(state: NotchiState, isSelected: Bool) -> some View {
+        SessionSpriteView(
+            state: state,
+            isSelected: isSelected,
+            onTap: {}
+        )
     }
 
     private func openSettings() {

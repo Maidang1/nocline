@@ -20,30 +20,43 @@ enum ActivityItem: Identifiable {
 }
 
 struct ExpandedPanelView: View {
-    let state: NotchiState
-    let stats: SessionStats
+    let sessionStore: SessionStore
     let usageService: ClaudeUsageService
     @Binding var showingSettings: Bool
     @Binding var showingCredentials: Bool
+    @Binding var showingSessionActivity: Bool
     let onSettingsTap: () -> Void
 
+    private var effectiveSession: SessionData? {
+        sessionStore.effectiveSession
+    }
+
+    private var state: NotchiState {
+        effectiveSession?.state ?? .idle
+    }
+
     private var showIndicator: Bool {
-        switch state {
-        case .idle, .sleeping, .happy:
-            return false
-        case .thinking, .working, .alert, .compacting:
-            return true
-        }
+        state != .idle && state != .sleeping && state != .happy
     }
 
     private var hasActivity: Bool {
-        !stats.recentEvents.isEmpty || !stats.recentAssistantMessages.isEmpty || stats.isProcessing || showIndicator || stats.lastUserPrompt != nil
+        guard let session = effectiveSession else { return false }
+        return !session.recentEvents.isEmpty ||
+               !session.recentAssistantMessages.isEmpty ||
+               session.isProcessing ||
+               showIndicator ||
+               session.lastUserPrompt != nil
     }
 
     private var unifiedActivityItems: [ActivityItem] {
-        let toolItems = stats.recentEvents.map { ActivityItem.tool($0) }
-        let messageItems = stats.recentAssistantMessages.map { ActivityItem.assistant($0) }
+        guard let session = effectiveSession else { return [] }
+        let toolItems = session.recentEvents.map { ActivityItem.tool($0) }
+        let messageItems = session.recentAssistantMessages.map { ActivityItem.assistant($0) }
         return (toolItems + messageItems).sorted { $0.timestamp < $1.timestamp }
+    }
+
+    private var shouldShowSessionPicker: Bool {
+        sessionStore.activeSessionCount >= 2 && !showingSessionActivity
     }
 
     var body: some View {
@@ -54,6 +67,9 @@ struct ExpandedPanelView: View {
             } else if showingSettings {
                 PanelSettingsView(showingCredentials: $showingCredentials)
                     .transition(.move(edge: .trailing).combined(with: .opacity))
+            } else if shouldShowSessionPicker {
+                sessionPickerContent(geometry: geometry)
+                    .transition(.move(edge: .leading).combined(with: .opacity))
             } else {
                 activityContent(geometry: geometry)
                     .transition(.move(edge: .leading).combined(with: .opacity))
@@ -61,6 +77,41 @@ struct ExpandedPanelView: View {
         }
         .animation(.easeInOut(duration: 0.25), value: showingSettings)
         .animation(.easeInOut(duration: 0.25), value: showingCredentials)
+        .animation(.easeInOut(duration: 0.25), value: shouldShowSessionPicker)
+    }
+
+    @ViewBuilder
+    private func sessionPickerContent(geometry: GeometryProxy) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Spacer()
+                .frame(height: geometry.size.height * 0.3)
+
+            VStack(alignment: .leading, spacing: 0) {
+                Divider().background(Color.white.opacity(0.08))
+
+                SessionListView(
+                    sessions: sessionStore.sortedSessions,
+                    selectedSessionId: sessionStore.selectedSessionId,
+                    onSelectSession: { sessionId in
+                        sessionStore.selectSession(sessionId)
+                        showingSessionActivity = true
+                    },
+                    onDeleteSession: { sessionId in
+                        sessionStore.dismissSession(sessionId)
+                    }
+                )
+
+                UsageBarView(
+                    usage: usageService.currentUsage,
+                    isLoading: usageService.isLoading,
+                    error: usageService.error,
+                    onSettingsTap: onSettingsTap
+                )
+            }
+            .padding(.horizontal, 12)
+        }
+        .padding(.bottom, 8)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
     @ViewBuilder
@@ -94,16 +145,32 @@ struct ExpandedPanelView: View {
 
     private var activitySection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Activity")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(TerminalColors.secondaryText)
-                .padding(.top, 12)
-                .padding(.bottom, 5)
+            HStack {
+                Text("Activity")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(TerminalColors.secondaryText)
+
+                if let session = effectiveSession {
+                    Text("- \(session.projectName)")
+                        .font(.system(size: 11))
+                        .foregroundColor(TerminalColors.dimmedText)
+                }
+
+                Spacer()
+
+                if let session = effectiveSession {
+                    Text(session.formattedDuration)
+                        .font(.system(size: 10, weight: .medium).monospacedDigit())
+                        .foregroundColor(TerminalColors.dimmedText)
+                }
+            }
+            .padding(.top, 12)
+            .padding(.bottom, 5)
 
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
-                        if let prompt = stats.lastUserPrompt {
+                        if let prompt = effectiveSession?.lastUserPrompt {
                             UserPromptBubbleView(text: prompt)
                                 .frame(maxWidth: .infinity, alignment: .trailing)
                                 .padding(.bottom, 8)

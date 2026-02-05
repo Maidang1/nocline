@@ -104,9 +104,14 @@ struct CredentialsFormView: View {
                 .foregroundColor(TerminalColors.dimmedText)
                 .frame(width: 12)
 
-            Text("Open ").foregroundColor(TerminalColors.secondaryText) +
-            Text("claude.ai Usage \(Image(systemName: "arrow.up.right.square"))")
-                .foregroundColor(TerminalColors.iMessageBlue)
+            HStack(spacing: 0) {
+                Text("Open ")
+                    .foregroundColor(TerminalColors.secondaryText)
+                Text("claude.ai Usage ")
+                    .foregroundColor(TerminalColors.iMessageBlue)
+                Image(systemName: "arrow.up.right.square")
+                    .foregroundColor(TerminalColors.iMessageBlue)
+            }
         }
         .font(.system(size: 11))
         .onTapGesture {
