@@ -18,7 +18,8 @@ actor ConversationParser {
     private var seenMessageIds: [String: Set<String>] = [:]
 
     /// Parse only NEW assistant text messages since last call
-    func parseIncremental(sessionId: String, cwd: String) -> [AssistantMessage] {
+    /// - Parameter after: Only return messages with timestamps after this date (filters out old messages from previous prompts)
+    func parseIncremental(sessionId: String, cwd: String, after: Date? = nil) -> [AssistantMessage] {
         let sessionFile = Self.sessionFilePath(sessionId: sessionId, cwd: cwd)
 
         guard FileManager.default.fileExists(atPath: sessionFile) else {
@@ -43,7 +44,7 @@ actor ConversationParser {
         if fileSize < lastOffset {
             lastFileOffset[sessionId] = 0
             seenMessageIds[sessionId] = []
-            return parseIncremental(sessionId: sessionId, cwd: cwd)
+            return parseIncremental(sessionId: sessionId, cwd: cwd, after: after)
         }
 
         // No new content
@@ -120,15 +121,19 @@ actor ConversationParser {
             }
 
             // Only add if we have text content
-            if !textParts.isEmpty {
-                let fullText = textParts.joined(separator: "\n")
-                messages.append(AssistantMessage(
-                    id: uuid,
-                    text: fullText,
-                    timestamp: timestamp
-                ))
-                seen.insert(uuid)
-            }
+            guard !textParts.isEmpty else { continue }
+
+            seen.insert(uuid)
+
+            // Filter out messages from before the prompt was submitted
+            if let after, timestamp <= after { continue }
+
+            let fullText = textParts.joined(separator: "\n")
+            messages.append(AssistantMessage(
+                id: uuid,
+                text: fullText,
+                timestamp: timestamp
+            ))
         }
 
         lastFileOffset[sessionId] = fileSize
@@ -141,28 +146,6 @@ actor ConversationParser {
     func resetState(for sessionId: String) {
         lastFileOffset.removeValue(forKey: sessionId)
         seenMessageIds.removeValue(forKey: sessionId)
-    }
-
-    /// Mark the current file position as the starting point for future parsing
-    /// Used when a new user prompt is submitted to ignore old messages
-    func markCurrentPosition(sessionId: String, cwd: String) {
-        let sessionFile = Self.sessionFilePath(sessionId: sessionId, cwd: cwd)
-
-        guard FileManager.default.fileExists(atPath: sessionFile),
-              let fileHandle = FileHandle(forReadingAtPath: sessionFile) else {
-            // No file yet - clear state so we start fresh
-            lastFileOffset.removeValue(forKey: sessionId)
-            seenMessageIds.removeValue(forKey: sessionId)
-            return
-        }
-
-        defer { try? fileHandle.close() }
-
-        // Set offset to current end of file
-        if let fileSize = try? fileHandle.seekToEnd() {
-            lastFileOffset[sessionId] = fileSize
-            seenMessageIds[sessionId] = []
-        }
     }
 
     /// Build session file path from sessionId and cwd

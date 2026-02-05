@@ -32,12 +32,7 @@ final class NotchiStateMachine {
 
         switch event.event {
         case "UserPromptSubmit":
-            Task {
-                await ConversationParser.shared.markCurrentPosition(
-                    sessionId: event.sessionId,
-                    cwd: event.cwd
-                )
-            }
+            break
 
         case "PreToolUse":
             if isDone {
@@ -94,9 +89,11 @@ final class NotchiStateMachine {
             try? await Task.sleep(for: Self.syncDebounce)
             guard !Task.isCancelled else { return }
 
+            let session = sessionStore.sessions[sessionId]
             let messages = await ConversationParser.shared.parseIncremental(
                 sessionId: sessionId,
-                cwd: cwd
+                cwd: cwd,
+                after: session?.promptSubmitTime
             )
 
             if !messages.isEmpty {

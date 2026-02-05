@@ -14,6 +14,7 @@ final class SessionData: Identifiable {
     private(set) var recentEvents: [SessionEvent] = []
     private(set) var recentAssistantMessages: [AssistantMessage] = []
     private(set) var lastUserPrompt: String?
+    private(set) var promptSubmitTime: Date?
 
     private var durationTimer: Task<Void, Never>?
     private(set) var formattedDuration: String = "0m 00s"
@@ -64,8 +65,10 @@ final class SessionData: Identifiable {
     }
 
     func recordUserPrompt(_ prompt: String) {
+        let now = Date()
         lastUserPrompt = prompt.truncatedForPrompt()
-        lastActivity = Date()
+        promptSubmitTime = now
+        lastActivity = now
     }
 
     func recordPreToolUse(tool: String?, toolInput: [String: Any]?, toolUseId: String?) {
