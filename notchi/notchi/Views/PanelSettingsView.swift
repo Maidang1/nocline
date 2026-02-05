@@ -25,11 +25,14 @@ struct PanelSettingsView: View {
                     togglesSection
                     Divider().background(Color.white.opacity(0.08))
                     actionsSection
-                    Divider().background(Color.white.opacity(0.08))
-                    quitSection
                 }
+                .padding(.top, 10)
             }
             .scrollIndicators(.hidden)
+
+            Spacer()
+
+            quitSection
         }
         .padding(.horizontal, 12)
         .padding(.top, 10)
@@ -38,10 +41,6 @@ struct PanelSettingsView: View {
 
     private var displaySection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Display")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(TerminalColors.dimmedText)
-
             ScreenPickerRow(screenSelector: ScreenSelector.shared)
 
             SoundPickerView()

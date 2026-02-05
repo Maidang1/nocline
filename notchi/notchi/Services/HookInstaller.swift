@@ -5,6 +5,7 @@ private let logger = Logger(subsystem: "com.ruban.notchi", category: "HookInstal
 
 struct HookInstaller {
 
+    @discardableResult
     static func installIfNeeded() -> Bool {
         let claudeDir = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".claude")
