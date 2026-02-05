@@ -15,7 +15,7 @@ struct SessionListView: View {
                 .padding(.bottom, 8)
 
             ScrollView {
-                VStack(spacing: 4) {
+                VStack(spacing: 2) {
                     ForEach(sessions) { session in
                         SessionRowView(
                             session: session,

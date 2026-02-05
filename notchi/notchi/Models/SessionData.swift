@@ -5,6 +5,7 @@ import Foundation
 final class SessionData: Identifiable {
     let id: String
     let cwd: String
+    let sessionNumber: Int
     let sessionStartTime: Date
 
     private(set) var state: NotchiState = .idle
@@ -25,13 +26,15 @@ final class SessionData: Identifiable {
     }
 
     var displayTitle: String {
+        let title = "\(projectName) #\(sessionNumber)"
         if let prompt = lastUserPrompt {
-            return "\(projectName): \(prompt)"
+            return "\(title) - \(prompt)"
         }
-        return projectName
+        return title
     }
 
     var activityPreview: String? {
+        print("[SessionData \(id.prefix(8))] activityPreview: events=\(recentEvents.count), messages=\(recentAssistantMessages.count)")
         if let lastEvent = recentEvents.last {
             return lastEvent.description ?? lastEvent.tool ?? lastEvent.type
         }
@@ -41,9 +44,10 @@ final class SessionData: Identifiable {
         return nil
     }
 
-    init(sessionId: String, cwd: String) {
+    init(sessionId: String, cwd: String, sessionNumber: Int) {
         self.id = sessionId
         self.cwd = cwd
+        self.sessionNumber = sessionNumber
         self.sessionStartTime = Date()
         self.lastActivity = Date()
         startDurationTimer()
@@ -101,14 +105,17 @@ final class SessionData: Identifiable {
     }
 
     func recordAssistantMessages(_ messages: [AssistantMessage]) {
+        print("[SessionData \(id.prefix(8))] Recording \(messages.count) messages, had \(recentAssistantMessages.count)")
         recentAssistantMessages.append(contentsOf: messages)
         while recentAssistantMessages.count > Self.maxAssistantMessages {
             recentAssistantMessages.removeFirst()
         }
+        print("[SessionData \(id.prefix(8))] Now have \(recentAssistantMessages.count) messages")
         lastActivity = Date()
     }
 
     func clearAssistantMessages() {
+        print("[SessionData \(id.prefix(8))] CLEARING messages (had \(recentAssistantMessages.count))")
         recentAssistantMessages = []
     }
 

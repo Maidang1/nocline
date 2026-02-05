@@ -27,6 +27,12 @@ struct SessionRowView: View {
                             .foregroundColor(TerminalColors.dimmedText)
                             .lineLimit(1)
                     }
+
+                    #if DEBUG
+                    Text("msgs: \(session.recentAssistantMessages.count)")
+                        .font(.system(size: 8))
+                        .foregroundColor(.red)
+                    #endif
                 }
 
                 Spacer()
@@ -34,13 +40,15 @@ struct SessionRowView: View {
                 Button(action: onDelete) {
                     Image(systemName: "trash")
                         .font(.system(size: 11))
-                        .foregroundColor(TerminalColors.dimmedText.opacity(isTrashHovered ? 1 : 0.8))
+                        .foregroundColor(TerminalColors.dimmedText.opacity(isTrashHovered ? 1 : 0.9))
+                        .frame(width: 20, height: 20)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .onHover { isTrashHovered = $0 }
             }
             .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+            .padding(.vertical, 5)
             .contentShape(Rectangle())
             .background(isSelected || isRowHovered ? TerminalColors.hoverBackground : Color.clear)
             .cornerRadius(6)

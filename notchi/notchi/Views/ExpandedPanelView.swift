@@ -146,14 +146,10 @@ struct ExpandedPanelView: View {
     private var activitySection: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("Activity")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(TerminalColors.secondaryText)
-
                 if let session = effectiveSession {
-                    Text("- \(session.projectName)")
-                        .font(.system(size: 11))
-                        .foregroundColor(TerminalColors.dimmedText)
+                    Text("Notchi #\(session.sessionNumber)")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(TerminalColors.secondaryText)
                 }
 
                 Spacer()

@@ -10,6 +10,7 @@ final class SessionStore {
 
     private(set) var sessions: [String: SessionData] = [:]
     private(set) var selectedSessionId: String?
+    private var nextSessionNumber = 1
 
     private init() {}
 
@@ -106,9 +107,11 @@ final class SessionStore {
             return existing
         }
 
-        let session = SessionData(sessionId: sessionId, cwd: cwd)
+        let sessionNumber = nextSessionNumber
+        nextSessionNumber += 1
+        let session = SessionData(sessionId: sessionId, cwd: cwd, sessionNumber: sessionNumber)
         sessions[sessionId] = session
-        logger.info("Created session: \(sessionId, privacy: .public) at \(cwd, privacy: .public)")
+        logger.info("Created session #\(sessionNumber): \(sessionId, privacy: .public) at \(cwd, privacy: .public)")
 
         if activeSessionCount == 1 {
             selectedSessionId = sessionId
