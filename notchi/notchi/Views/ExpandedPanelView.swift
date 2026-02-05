@@ -24,6 +24,7 @@ struct ExpandedPanelView: View {
     let stats: SessionStats
     let usageService: ClaudeUsageService
     @Binding var showingSettings: Bool
+    @Binding var showingCredentials: Bool
     let onSettingsTap: () -> Void
 
     private var showIndicator: Bool {
@@ -47,8 +48,11 @@ struct ExpandedPanelView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            if showingSettings {
-                PanelSettingsView()
+            if showingCredentials {
+                CredentialsFormView()
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+            } else if showingSettings {
+                PanelSettingsView(showingCredentials: $showingCredentials)
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             } else {
                 activityContent(geometry: geometry)
@@ -56,6 +60,7 @@ struct ExpandedPanelView: View {
             }
         }
         .animation(.easeInOut(duration: 0.25), value: showingSettings)
+        .animation(.easeInOut(duration: 0.25), value: showingCredentials)
     }
 
     @ViewBuilder

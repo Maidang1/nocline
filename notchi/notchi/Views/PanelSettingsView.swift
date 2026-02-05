@@ -2,6 +2,7 @@ import ServiceManagement
 import SwiftUI
 
 struct PanelSettingsView: View {
+    @Binding var showingCredentials: Bool
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var hooksInstalled = HookInstaller.isInstalled()
     @State private var hooksError = false
@@ -14,6 +15,18 @@ struct PanelSettingsView: View {
 
     private var hookStatusColor: Color {
         hooksInstalled && !hooksError ? TerminalColors.green : TerminalColors.red
+    }
+
+    private var isCredentialsConfigured: Bool {
+        KeychainManager.hasCredentials
+    }
+
+    private var credentialsStatusText: String {
+        isCredentialsConfigured ? "Configured" : "Not Configured"
+    }
+
+    private var credentialsStatusColor: Color {
+        isCredentialsConfigured ? TerminalColors.green : TerminalColors.red
     }
 
     var body: some View {
@@ -59,6 +72,18 @@ struct PanelSettingsView: View {
             Button(action: installHooksIfNeeded) {
                 SettingsRowView(icon: "terminal", title: "Hooks") {
                     statusBadge(hookStatusText, color: hookStatusColor)
+                }
+            }
+            .buttonStyle(.plain)
+
+            Button(action: { showingCredentials = true }) {
+                SettingsRowView(icon: "gauge.with.dots.needle.33percent", title: "Claude Usage") {
+                    HStack(spacing: 4) {
+                        statusBadge(credentialsStatusText, color: credentialsStatusColor)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 10))
+                            .foregroundColor(TerminalColors.dimmedText)
+                    }
                 }
             }
             .buttonStyle(.plain)
@@ -193,7 +218,7 @@ struct ToggleSwitch: View {
 }
 
 #Preview {
-    PanelSettingsView()
+    PanelSettingsView(showingCredentials: .constant(false))
         .frame(width: 402, height: 400)
         .background(Color.black)
 }

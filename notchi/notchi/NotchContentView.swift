@@ -21,6 +21,7 @@ struct NotchContentView: View {
     var usageService: ClaudeUsageService = .shared
     @State private var bobOffset: CGFloat = 0
     @State private var showingPanelSettings = false
+    @State private var showingCredentials = false
 
     private var notchSize: CGSize { panelManager.notchSize }
     private var isExpanded: Bool { panelManager.isExpanded }
@@ -85,6 +86,7 @@ struct NotchContentView: View {
         .onChange(of: isExpanded) { _, expanded in
             if !expanded {
                 showingPanelSettings = false
+                showingCredentials = false
             }
         }
     }
@@ -102,6 +104,7 @@ struct NotchContentView: View {
                         stats: stateMachine.stats,
                         usageService: usageService,
                         showingSettings: $showingPanelSettings,
+                        showingCredentials: $showingCredentials,
                         onSettingsTap: { openSettings() }
                     )
                     .frame(
@@ -121,7 +124,7 @@ struct NotchContentView: View {
 
             if isExpanded {
                 HStack {
-                    if showingPanelSettings {
+                    if showingPanelSettings || showingCredentials {
                         backButton
                             .padding(.leading, 15)
                     }
@@ -144,7 +147,7 @@ struct NotchContentView: View {
     }
 
     private var backButton: some View {
-        Button(action: { showingPanelSettings = false }) {
+        Button(action: goBack) {
             HStack(spacing: 5) {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 11, weight: .semibold))
@@ -154,6 +157,14 @@ struct NotchContentView: View {
             .foregroundColor(.white.opacity(0.7))
         }
         .buttonStyle(.plain)
+    }
+
+    private func goBack() {
+        if showingCredentials {
+            showingCredentials = false
+        } else if showingPanelSettings {
+            showingPanelSettings = false
+        }
     }
 
     @ViewBuilder
