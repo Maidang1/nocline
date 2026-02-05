@@ -5,13 +5,13 @@ private let logger = Logger(subsystem: "com.ruban.notchi", category: "HookInstal
 
 struct HookInstaller {
 
-    static func installIfNeeded() {
+    static func installIfNeeded() -> Bool {
         let claudeDir = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".claude")
 
         guard FileManager.default.fileExists(atPath: claudeDir.path) else {
             logger.warning("Claude Code not installed (~/.claude not found)")
-            return
+            return false
         }
 
         let hooksDir = claudeDir.appendingPathComponent("hooks")
@@ -25,7 +25,7 @@ struct HookInstaller {
             )
         } catch {
             logger.error("Failed to create hooks directory: \(error.localizedDescription)")
-            return
+            return false
         }
 
         if let bundled = Bundle.main.url(forResource: "notchi-hook", withExtension: "sh") {
@@ -39,17 +39,17 @@ struct HookInstaller {
                 logger.info("Installed hook script to \(hookScript.path, privacy: .public)")
             } catch {
                 logger.error("Failed to install hook script: \(error.localizedDescription)")
-                return
+                return false
             }
         } else {
             logger.error("Hook script not found in bundle")
-            return
+            return false
         }
 
-        updateSettings(at: settings)
+        return updateSettings(at: settings)
     }
 
-    private static func updateSettings(at settingsURL: URL) {
+    private static func updateSettings(at settingsURL: URL) -> Bool {
         var json: [String: Any] = [:]
         if let data = try? Data(contentsOf: settingsURL),
            let existing = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
@@ -101,16 +101,21 @@ struct HookInstaller {
 
         json["hooks"] = hooks
 
-        if let data = try? JSONSerialization.data(
+        guard let data = try? JSONSerialization.data(
             withJSONObject: json,
             options: [.prettyPrinted, .sortedKeys]
-        ) {
-            do {
-                try data.write(to: settingsURL)
-                logger.info("Updated settings.json with Notchi hooks")
-            } catch {
-                logger.error("Failed to write settings.json: \(error.localizedDescription)")
-            }
+        ) else {
+            logger.error("Failed to serialize settings JSON")
+            return false
+        }
+
+        do {
+            try data.write(to: settingsURL)
+            logger.info("Updated settings.json with Notchi hooks")
+            return true
+        } catch {
+            logger.error("Failed to write settings.json: \(error.localizedDescription)")
+            return false
         }
     }
 

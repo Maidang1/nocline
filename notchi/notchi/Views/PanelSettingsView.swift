@@ -3,6 +3,18 @@ import SwiftUI
 
 struct PanelSettingsView: View {
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
+    @State private var hooksInstalled = HookInstaller.isInstalled()
+    @State private var hooksError = false
+
+    private var hookStatusText: String {
+        if hooksError { return "Error" }
+        if hooksInstalled { return "Installed" }
+        return "Not Installed"
+    }
+
+    private var hookStatusColor: Color {
+        hooksInstalled && !hooksError ? TerminalColors.green : TerminalColors.red
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -45,13 +57,12 @@ struct PanelSettingsView: View {
             }
             .buttonStyle(.plain)
 
-            SettingsRowView(icon: "terminal", title: "Hooks") {
-                statusBadge("Installed", color: TerminalColors.green)
+            Button(action: installHooksIfNeeded) {
+                SettingsRowView(icon: "terminal", title: "Hooks") {
+                    statusBadge(hookStatusText, color: hookStatusColor)
+                }
             }
-
-            SettingsRowView(icon: "lock.shield", title: "Accessibility") {
-                statusBadge("Granted", color: TerminalColors.green)
-            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -108,6 +119,17 @@ struct PanelSettingsView: View {
             launchAtLogin = SMAppService.mainApp.status == .enabled
         } catch {
             print("Failed to toggle launch at login: \(error)")
+        }
+    }
+
+    private func installHooksIfNeeded() {
+        guard !hooksInstalled else { return }
+        hooksError = false
+        let success = HookInstaller.installIfNeeded()
+        if success {
+            hooksInstalled = HookInstaller.isInstalled()
+        } else {
+            hooksError = true
         }
     }
 
