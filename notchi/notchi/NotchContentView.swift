@@ -67,7 +67,7 @@ struct NotchContentView: View {
         .background {
             ZStack(alignment: .top) {
                 Color.black
-                GrassIslandView(state: stateMachine.currentState)
+                GrassIslandView(sessions: sessionStore.sortedSessions)
                     .frame(height: grassHeight)
                     .drawingGroup()
                     .opacity(isExpanded && !showingPanelSettings ? 1 : 0)
@@ -193,40 +193,10 @@ struct NotchContentView: View {
 
     @ViewBuilder
     private var headerSprites: some View {
-        let sessions = sessionStore.sortedSessions
-        let maxVisibleSprites = 4
-
-        if sessions.isEmpty {
-            singleSprite(state: .idle, isSelected: true)
-        } else if sessions.count == 1, let session = sessions.first {
-            singleSprite(state: session.state, isSelected: true)
-        } else {
-            HStack(spacing: 4) {
-                ForEach(sessions.prefix(maxVisibleSprites)) { session in
-                    SessionSpriteView(
-                        state: session.state,
-                        isSelected: session.id == sessionStore.selectedSessionId,
-                        onTap: {
-                            sessionStore.selectSession(session.id)
-                            showingSessionActivity = true
-                        }
-                    )
-                }
-
-                if sessions.count > maxVisibleSprites {
-                    Text("+\(sessions.count - maxVisibleSprites)")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(.white.opacity(0.5))
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func singleSprite(state: NotchiState, isSelected: Bool) -> some View {
+        let topSession = sessionStore.sortedSessions.first
         SessionSpriteView(
-            state: state,
-            isSelected: isSelected,
+            state: topSession?.state ?? .idle,
+            isSelected: true,
             onTap: {}
         )
     }

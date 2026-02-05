@@ -11,7 +11,7 @@ final class NotchiStateMachine {
     let sessionStore = SessionStore.shared
 
     private var sleepTimer: Task<Void, Never>?
-    private var pendingSyncTask: Task<Void, Never>?
+    private var pendingSyncTasks: [String: Task<Void, Never>] = [:]
 
     private static let sleepDelay: Duration = .seconds(300)
     private static let syncDebounce: Duration = .milliseconds(100)
@@ -89,8 +89,8 @@ final class NotchiStateMachine {
     }
 
     private func scheduleFileSync(sessionId: String, cwd: String) {
-        pendingSyncTask?.cancel()
-        pendingSyncTask = Task {
+        pendingSyncTasks[sessionId]?.cancel()
+        pendingSyncTasks[sessionId] = Task {
             try? await Task.sleep(for: Self.syncDebounce)
             guard !Task.isCancelled else { return }
 
@@ -102,6 +102,8 @@ final class NotchiStateMachine {
             if !messages.isEmpty {
                 sessionStore.recordAssistantMessages(messages, for: sessionId)
             }
+
+            pendingSyncTasks.removeValue(forKey: sessionId)
         }
     }
 }

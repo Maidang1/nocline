@@ -1,19 +1,12 @@
 import SwiftUI
 
 struct GrassIslandView: View {
-    let state: NotchiState
-
-    @State private var spriteXPosition: CGFloat = 0.5
-    @State private var isSwayingRight = true
-    @State private var isBobUp = true
-    @State private var isWalking = false
-    @State private var facingRight = true
+    let sessions: [SessionData]
 
     private let patchWidth: CGFloat = 80
-    private let spriteSize: CGFloat = 32
-    private let spriteYOffset: CGFloat = -15
-    private let swayDuration: Double = 2.0
-    private let walkDuration: Double = 1.5
+    private let spriteSpreadWidth: CGFloat = 0.7
+    private let spriteLeftMargin: CGFloat = 0.15
+    private let spriteJitterFactor: CGFloat = 0.5
 
     var body: some View {
         GeometryReader { geometry in
@@ -29,39 +22,67 @@ struct GrassIslandView: View {
                 }
                 .frame(width: geometry.size.width, alignment: .leading)
 
-                spriteView
-                    .offset(x: spriteXOffset(for: geometry.size.width), y: spriteYOffset)
+                if sessions.isEmpty {
+                    GrassSpriteView(state: .idle, xPosition: 0.5, totalWidth: geometry.size.width)
+                } else {
+                    ForEach(Array(sessions.enumerated()), id: \.element.id) { index, session in
+                        GrassSpriteView(
+                            state: session.state,
+                            xPosition: spritePosition(for: session.id, index: index, total: sessions.count),
+                            totalWidth: geometry.size.width
+                        )
+                    }
+                }
             }
             .frame(width: geometry.size.width, height: geometry.size.height, alignment: .bottom)
         }
         .clipped()
-        .onAppear {
-            startSwayAnimation()
-            startBobAnimation()
-            scheduleNextWalk()
-        }
-        .onChange(of: state) { _, _ in
-            startBobAnimation()
-        }
     }
 
     private func patchCount(for width: CGFloat) -> Int {
         Int(ceil(width / patchWidth)) + 1
     }
 
-    private var spriteView: some View {
+    private func spritePosition(for sessionId: String, index: Int, total: Int) -> CGFloat {
+        let segmentWidth = spriteSpreadWidth / CGFloat(max(total, 1))
+        let basePosition = spriteLeftMargin + (CGFloat(index) * segmentWidth)
+        let hash = abs(sessionId.hashValue)
+        let jitter = CGFloat(hash % 100) / 100.0 * segmentWidth * spriteJitterFactor
+        return basePosition + jitter
+    }
+}
+
+private struct GrassSpriteView: View {
+    let state: NotchiState
+    let xPosition: CGFloat
+    let totalWidth: CGFloat
+
+    @State private var isSwayingRight = true
+    @State private var isBobUp = true
+
+    private let spriteSize: CGFloat = 32
+    private let spriteYOffset: CGFloat = -15
+    private let swayDuration: Double = 2.0
+
+    var body: some View {
         Image(systemName: state.sfSymbolName)
             .font(.system(size: spriteSize))
             .foregroundColor(.white)
-            .scaleEffect(x: facingRight ? 1 : -1, y: 1)
             .rotationEffect(.degrees(isSwayingRight ? state.swayAmplitude : -state.swayAmplitude))
-            .offset(y: isBobUp ? -2 : 2)
+            .offset(x: xOffset, y: spriteYOffset + (isBobUp ? -2 : 2))
+            .onAppear {
+                startSwayAnimation()
+                startBobAnimation()
+            }
+            .onChange(of: state) { _, _ in
+                startBobAnimation()
+            }
     }
 
-    private func spriteXOffset(for totalWidth: CGFloat) -> CGFloat {
+    private var xOffset: CGFloat {
         let usableWidth = totalWidth * 0.8
         let leftMargin = totalWidth * 0.1
-        return leftMargin + (spriteXPosition * usableWidth) - (totalWidth / 2)
+        return leftMargin + (xPosition * usableWidth) - (totalWidth / 2)
     }
 
     private func startSwayAnimation() {
@@ -73,45 +94,6 @@ struct GrassIslandView: View {
     private func startBobAnimation() {
         withAnimation(.easeInOut(duration: state.bobDuration).repeatForever(autoreverses: true)) {
             isBobUp.toggle()
-        }
-    }
-
-    private func scheduleNextWalk() {
-        guard state.canWalk else {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                scheduleNextWalk()
-            }
-            return
-        }
-
-        let interval = Double.random(in: state.walkFrequencyRange)
-        DispatchQueue.main.asyncAfter(deadline: .now() + interval) {
-            performWalk()
-        }
-    }
-
-    private func performWalk() {
-        guard state.canWalk, !isWalking else {
-            scheduleNextWalk()
-            return
-        }
-
-        isWalking = true
-
-        let targetPosition = CGFloat.random(in: 0.15...0.85)
-        let movingRight = targetPosition > spriteXPosition
-
-        withAnimation(.easeInOut(duration: 0.1)) {
-            facingRight = movingRight
-        }
-
-        withAnimation(.easeInOut(duration: walkDuration)) {
-            spriteXPosition = targetPosition
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + walkDuration) {
-            isWalking = false
-            scheduleNextWalk()
         }
     }
 }
