@@ -67,12 +67,8 @@ struct WorkingIndicatorView: View {
         String(repeating: ".", count: dotCount)
     }
 
-    private var isDone: Bool {
-        state == .happy
-    }
-
     private var statusText: String {
-        switch state {
+        switch state.task {
         case .compacting: return "Compacting"
         default: return "Clanking"
         }
@@ -80,30 +76,20 @@ struct WorkingIndicatorView: View {
 
     var body: some View {
         HStack(spacing: 4) {
-            if isDone {
-                Text("✓")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(TerminalColors.green)
-                    .frame(width: 14, alignment: .center)
-                Text("Done!")
-                    .font(.system(size: 13, weight: .medium).italic())
-                    .foregroundColor(TerminalColors.green)
-            } else {
-                Text(symbols[symbolPhase])
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(TerminalColors.claudeOrange)
-                    .frame(width: 14, alignment: .center)
-                Text("\(statusText)\(dots)")
-                    .font(.system(size: 13, weight: .medium).italic())
-                    .foregroundColor(TerminalColors.claudeOrange)
-            }
+            Text(symbols[symbolPhase])
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(TerminalColors.claudeOrange)
+                .frame(width: 14, alignment: .center)
+            Text("\(statusText)\(dots)")
+                .font(.system(size: 13, weight: .medium).italic())
+                .foregroundColor(TerminalColors.claudeOrange)
         }
         .padding(.vertical, 6)
         .onReceive(dotsTimer) { _ in
-            if !isDone { dotCount = (dotCount % 3) + 1 }
+            dotCount = (dotCount % 3) + 1
         }
         .onReceive(symbolTimer) { _ in
-            if !isDone { symbolPhase = (symbolPhase + 1) % symbols.count }
+            symbolPhase = (symbolPhase + 1) % symbols.count
         }
     }
 }

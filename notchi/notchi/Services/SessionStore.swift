@@ -65,28 +65,28 @@ final class SessionStore {
                 session.recordUserPrompt(prompt)
             }
             session.clearAssistantMessages()
-            session.updateState(.thinking)
+            session.updateState(.working)
 
         case "PreCompact":
             session.updateState(.compacting)
 
         case "SessionStart":
-            session.updateState(.thinking)
+            session.updateState(.working)
 
         case "PreToolUse":
             let toolInput = event.toolInput?.mapValues { $0.value }
             session.recordPreToolUse(tool: event.tool, toolInput: toolInput, toolUseId: event.toolUseId)
-            session.updateState(.thinking)
+            session.updateState(.working)
 
         case "PermissionRequest":
-            session.updateState(.thinking)
+            session.updateState(.working)
 
         case "PostToolUse":
             let success = event.status != "error"
             session.recordPostToolUse(tool: event.tool, toolUseId: event.toolUseId, success: success)
 
         case "Stop", "SubagentStop":
-            session.updateState(.happy)
+            session.updateState(.idle)
 
         case "SessionEnd":
             session.endSession()
@@ -94,7 +94,7 @@ final class SessionStore {
 
         default:
             if !isProcessing && session.state != .idle {
-                session.updateState(.happy)
+                session.updateState(.idle)
             }
         }
 

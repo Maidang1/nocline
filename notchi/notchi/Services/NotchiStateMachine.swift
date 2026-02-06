@@ -64,7 +64,7 @@ final class NotchiStateMachine {
     }
 
     private func transitionGlobal(to newState: NotchiState) {
-        logger.info("Global state: \(newState.rawValue, privacy: .public)")
+        logger.info("Global state: \(newState.task.rawValue, privacy: .public)")
     }
 
     private func startSleepTimer() {

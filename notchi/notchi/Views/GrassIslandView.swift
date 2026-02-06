@@ -60,23 +60,27 @@ private struct GrassSpriteView: View {
     @State private var isSwayingRight = true
     @State private var isBobUp = true
 
-    private let spriteSize: CGFloat = 32
+    private let spriteSize: CGFloat = 64
     private let spriteYOffset: CGFloat = -15
     private let swayDuration: Double = 2.0
 
     var body: some View {
-        Image(systemName: state.sfSymbolName)
-            .font(.system(size: spriteSize))
-            .foregroundColor(.white)
-            .rotationEffect(.degrees(isSwayingRight ? state.swayAmplitude : -state.swayAmplitude))
-            .offset(x: xOffset, y: spriteYOffset + (isBobUp ? -2 : 2))
-            .onAppear {
-                startSwayAnimation()
-                startBobAnimation()
-            }
-            .onChange(of: state) { _, _ in
-                startBobAnimation()
-            }
+        SpriteSheetView(
+            spriteSheet: state.spriteSheetName,
+            frameCount: state.frameCount,
+            fps: state.animationFPS,
+            isAnimating: true
+        )
+        .frame(width: spriteSize, height: spriteSize)
+        .rotationEffect(.degrees(isSwayingRight ? state.swayAmplitude : -state.swayAmplitude))
+        .offset(x: xOffset, y: spriteYOffset + (isBobUp ? -2 : 2))
+        .onAppear {
+            startSwayAnimation()
+            startBobAnimation()
+        }
+        .onChange(of: state) { _, _ in
+            startBobAnimation()
+        }
     }
 
     private var xOffset: CGFloat {
