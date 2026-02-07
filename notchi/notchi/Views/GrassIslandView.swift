@@ -68,17 +68,18 @@ private struct GrassSpriteView: View {
         SpriteSheetView(
             spriteSheet: state.spriteSheetName,
             frameCount: state.frameCount,
+            columns: state.columns,
             fps: state.animationFPS,
             isAnimating: true
         )
         .frame(width: spriteSize, height: spriteSize)
-        .rotationEffect(.degrees(isSwayingRight ? state.swayAmplitude : -state.swayAmplitude))
+        .rotationEffect(.degrees(isSwayingRight ? state.swayAmplitude : -state.swayAmplitude), anchor: .bottom)
         .offset(x: xOffset, y: spriteYOffset + (isBobUp ? -2 : 2))
         .onAppear {
             startSwayAnimation()
             startBobAnimation()
         }
-        .onChange(of: state) { _, _ in
+        .onChange(of: state) {
             startBobAnimation()
         }
     }

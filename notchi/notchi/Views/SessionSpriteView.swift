@@ -12,6 +12,7 @@ struct SessionSpriteView: View {
             SpriteSheetView(
                 spriteSheet: state.spriteSheetName,
                 frameCount: state.frameCount,
+                columns: state.columns,
                 fps: state.animationFPS,
                 isAnimating: true
             )

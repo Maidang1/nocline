@@ -1,14 +1,7 @@
 enum NotchiTask: String, CaseIterable {
     case idle, working, sleeping, compacting
 
-    var animationFPS: Double {
-        switch self {
-        case .sleeping:   return 3.0
-        case .idle:       return 6.0
-        case .working:    return 12.0
-        case .compacting: return 10.0
-        }
-    }
+    var animationFPS: Double { 4.0 }
 
     var bobDuration: Double {
         switch self {
@@ -47,6 +40,8 @@ enum NotchiTask: String, CaseIterable {
     }
 
     var frameCount: Int { 6 }
+
+    var columns: Int { 6 }
 }
 
 enum NotchiEmotion: String, CaseIterable {
@@ -54,9 +49,9 @@ enum NotchiEmotion: String, CaseIterable {
 
     var swayAmplitude: Double {
         switch self {
-        case .neutral: return 3.0
-        case .happy:   return 8.0
-        case .sad:     return 1.0
+        case .neutral: return 1.0
+        case .happy:   return 2.0
+        case .sad:     return 0.5
         }
     }
 }
@@ -73,6 +68,7 @@ struct NotchiState: Equatable {
     var displayName: String { task.displayName }
     var walkFrequencyRange: ClosedRange<Double> { task.walkFrequencyRange }
     var frameCount: Int { task.frameCount }
+    var columns: Int { task.columns }
 
     static let idle = NotchiState(task: .idle)
     static let working = NotchiState(task: .working)

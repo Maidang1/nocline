@@ -3,6 +3,7 @@ import SwiftUI
 struct SpriteSheetView: View {
     let spriteSheet: String
     var frameCount: Int = 6
+    var columns: Int = 6
     var fps: Double = 10
     var isAnimating: Bool = true
 
@@ -11,6 +12,7 @@ struct SpriteSheetView: View {
             SpriteFrameView(
                 spriteSheet: spriteSheet,
                 frameCount: frameCount,
+                columns: columns,
                 currentFrame: currentFrame(at: timeline.date)
             )
         }
@@ -26,18 +28,25 @@ struct SpriteSheetView: View {
 private struct SpriteFrameView: View {
     let spriteSheet: String
     let frameCount: Int
+    let columns: Int
     let currentFrame: Int
 
     var body: some View {
         GeometryReader { geometry in
             let frameWidth = geometry.size.width
-            let sheetWidth = frameWidth * CGFloat(frameCount)
+            let frameHeight = geometry.size.height
+            let rows = (frameCount + columns - 1) / columns
+
+            let col = currentFrame % columns
+            let row = currentFrame / columns
 
             Image(spriteSheet)
                 .interpolation(.none)
                 .resizable()
-                .frame(width: sheetWidth, height: geometry.size.height)
-                .offset(x: -frameWidth * CGFloat(currentFrame))
+                .frame(width: frameWidth * CGFloat(columns),
+                       height: frameHeight * CGFloat(rows))
+                .offset(x: -frameWidth * CGFloat(col),
+                        y: -frameHeight * CGFloat(row))
         }
         .clipped()
     }
