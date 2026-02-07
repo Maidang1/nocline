@@ -16,7 +16,7 @@ struct SessionSpriteView: View {
                 fps: state.animationFPS,
                 isAnimating: true
             )
-            .frame(width: 25, height: 25)
+            .frame(width: 30, height: 30)
             .opacity(isSelected ? 1.0 : 0.5)
             .offset(y: bobOffset)
         }

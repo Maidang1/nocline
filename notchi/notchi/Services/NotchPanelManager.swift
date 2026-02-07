@@ -6,6 +6,7 @@ final class NotchPanelManager {
     static let shared = NotchPanelManager()
 
     private(set) var isExpanded = false
+    private(set) var isPinned = false
     private(set) var notchSize: CGSize = .zero
     weak var panel: NSPanel?
 
@@ -14,6 +15,7 @@ final class NotchPanelManager {
     private var screenHeight: CGFloat = 0
 
     private var mouseDownMonitor: EventMonitor?
+    private var mouseMoveMonitor: EventMonitor?
 
     private init() {
         setupEventMonitors()
@@ -55,14 +57,21 @@ final class NotchPanelManager {
             }
         }
         mouseDownMonitor?.start()
+
+        mouseMoveMonitor = EventMonitor(mask: .mouseMoved) { [weak self] _ in
+            Task { @MainActor in
+                self?.handleMouseMove()
+            }
+        }
+        mouseMoveMonitor?.start()
     }
 
     private func handleMouseDown() {
         let location = NSEvent.mouseLocation
 
         if isExpanded {
-            // Check if click is outside the panel
-            if !panelRect.contains(location) {
+            // Check if click is outside the panel (unless pinned)
+            if !isPinned && !panelRect.contains(location) {
                 collapse()
             }
         } else {
@@ -76,12 +85,13 @@ final class NotchPanelManager {
     func expand() {
         guard !isExpanded else { return }
         isExpanded = true
-        panel?.ignoresMouseEvents = false
+        panel?.ignoresMouseEvents = isPinned
     }
 
     func collapse() {
         guard isExpanded else { return }
         isExpanded = false
+        isPinned = false
         panel?.ignoresMouseEvents = true
     }
 
@@ -91,5 +101,19 @@ final class NotchPanelManager {
         } else {
             expand()
         }
+    }
+
+    func togglePin() {
+        isPinned.toggle()
+        panel?.ignoresMouseEvents = isPinned
+    }
+
+    private func handleMouseMove() {
+        guard isExpanded && isPinned else { return }
+
+        let location = NSEvent.mouseLocation
+        let mouseInPanel = panelRect.contains(location)
+
+        panel?.ignoresMouseEvents = !mouseInPanel
     }
 }

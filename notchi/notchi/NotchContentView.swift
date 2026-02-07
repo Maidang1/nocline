@@ -136,6 +136,12 @@ struct NotchContentView: View {
                     if shouldShowBackButton {
                         backButton
                             .padding(.leading, 15)
+                    } else {
+                        PanelHeaderButton(
+                            sfSymbol: panelManager.isPinned ? "pin.fill" : "pin",
+                            action: { panelManager.togglePin() }
+                        )
+                        .padding(.leading, 15)
                     }
                     Spacer()
                     headerButtons
@@ -186,7 +192,7 @@ struct NotchContentView: View {
                 .frame(width: notchSize.width - cornerRadiusInsets.closed.top)
 
             headerSprites
-                .offset(x: 15)
+                .offset(x: 15, y: -5)
                 .frame(width: sideWidth)
         }
     }
