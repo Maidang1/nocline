@@ -23,6 +23,7 @@ struct NotchContentView: View {
     @State private var showingCredentials = false
     @State private var showingSessionActivity = false
     @State private var isMuted = AppSettings.isMuted
+    @State private var isActivityCollapsed = false
 
     private var sessionStore: SessionStore {
         stateMachine.sessionStore
@@ -59,6 +60,12 @@ struct NotchContentView: View {
         (sessionStore.activeSessionCount >= 2 && showingSessionActivity)
     }
 
+    private var expandedPanelHeight: CGFloat {
+        let fullHeight = NotchConstants.expandedPanelSize.height - notchSize.height - 24
+        let collapsedHeight: CGFloat = 160
+        return isActivityCollapsed ? collapsedHeight : fullHeight
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             notchLayout
@@ -69,9 +76,22 @@ struct NotchContentView: View {
             ZStack(alignment: .top) {
                 Color.black
                 GrassIslandView(sessions: sessionStore.sortedSessions)
-                    .frame(height: grassHeight)
                     .drawingGroup()
+                    .frame(height: grassHeight, alignment: .bottom)
                     .opacity(isExpanded && !showingPanelSettings ? 1 : 0)
+            }
+        }
+        .overlay(alignment: .topTrailing) {
+            if isExpanded && !showingPanelSettings {
+                Button(action: { isActivityCollapsed.toggle() }) {
+                    Image(systemName: isActivityCollapsed ? "chevron.down" : "chevron.up")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.white.opacity(0.7))
+                        .padding(8)
+                }
+                .buttonStyle(.plain)
+                .offset(y: grassHeight - 30)
+                .padding(.trailing, 30)
             }
         }
         .clipShape(NotchShape(
@@ -115,11 +135,12 @@ struct NotchContentView: View {
                         showingSettings: $showingPanelSettings,
                         showingCredentials: $showingCredentials,
                         showingSessionActivity: $showingSessionActivity,
+                        isActivityCollapsed: $isActivityCollapsed,
                         onSettingsTap: { openSettings() }
                     )
                     .frame(
                         width: NotchConstants.expandedPanelSize.width - 48,
-                        height: NotchConstants.expandedPanelSize.height - notchSize.height - 24
+                        height: expandedPanelHeight
                     )
                     .transition(
                         .asymmetric(

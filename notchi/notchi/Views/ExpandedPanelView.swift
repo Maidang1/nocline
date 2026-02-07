@@ -25,6 +25,7 @@ struct ExpandedPanelView: View {
     @Binding var showingSettings: Bool
     @Binding var showingCredentials: Bool
     @Binding var showingSessionActivity: Bool
+    @Binding var isActivityCollapsed: Bool
     let onSettingsTap: () -> Void
 
     private var effectiveSession: SessionData? {
@@ -117,14 +118,18 @@ struct ExpandedPanelView: View {
     @ViewBuilder
     private func activityContent(geometry: GeometryProxy) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Spacer()
-                .frame(height: geometry.size.height * 0.3)
+            if isActivityCollapsed {
+                Spacer()
+            } else {
+                Spacer()
+                    .frame(height: geometry.size.height * 0.3)
+            }
 
             VStack(alignment: .leading, spacing: 0) {
                 if hasActivity {
                     Divider().background(Color.white.opacity(0.08))
                     activitySection
-                } else {
+                } else if !isActivityCollapsed {
                     Spacer()
                     emptyState
                     Spacer()
@@ -145,62 +150,64 @@ struct ExpandedPanelView: View {
 
     private var activitySection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                if let session = effectiveSession {
-                    Text("Notchi #\(session.sessionNumber)")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(TerminalColors.secondaryText)
+            if !isActivityCollapsed {
+                HStack {
+                    if let session = effectiveSession {
+                        Text("Notchi #\(session.sessionNumber)")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(TerminalColors.secondaryText)
+                    }
+
+                    Spacer()
+
+                    if let mode = effectiveSession?.currentModeDisplay {
+                        ModeBadgeView(mode: mode)
+                    }
                 }
+                .padding(.top, 6)
+                .padding(.bottom, 10)
 
-                Spacer()
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 0) {
+                            if let prompt = effectiveSession?.lastUserPrompt {
+                                UserPromptBubbleView(text: prompt)
+                                    .frame(maxWidth: .infinity, alignment: .trailing)
+                                    .padding(.bottom, 8)
+                            }
 
-                if let mode = effectiveSession?.currentModeDisplay {
-                    ModeBadgeView(mode: mode)
-                }
-            }
-            .padding(.top, 12)
-            .padding(.bottom, 5)
-
-            ScrollViewReader { proxy in
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        if let prompt = effectiveSession?.lastUserPrompt {
-                            UserPromptBubbleView(text: prompt)
-                                .frame(maxWidth: .infinity, alignment: .trailing)
-                                .padding(.bottom, 8)
+                            ForEach(unifiedActivityItems) { item in
+                                switch item {
+                                case .tool(let event):
+                                    ActivityRowView(event: event)
+                                        .id(item.id)
+                                case .assistant(let message):
+                                    AssistantTextRowView(message: message)
+                                        .id(item.id)
+                                }
+                            }
                         }
-
-                        ForEach(unifiedActivityItems) { item in
-                            switch item {
-                            case .tool(let event):
-                                ActivityRowView(event: event)
-                                    .id(item.id)
-                            case .assistant(let message):
-                                AssistantTextRowView(message: message)
-                                    .id(item.id)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(maxHeight: 200)
+                    .onAppear {
+                        if let lastItem = unifiedActivityItems.last {
+                            proxy.scrollTo(lastItem.id, anchor: .bottom)
+                        }
+                    }
+                    .onChange(of: unifiedActivityItems.last?.id) { _, newId in
+                        if let id = newId {
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                proxy.scrollTo(id, anchor: .bottom)
                             }
                         }
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .frame(maxHeight: 200)
-                .onAppear {
-                    if let lastItem = unifiedActivityItems.last {
-                        proxy.scrollTo(lastItem.id, anchor: .bottom)
-                    }
-                }
-                .onChange(of: unifiedActivityItems.last?.id) { _, newId in
-                    if let id = newId {
-                        withAnimation(.easeOut(duration: 0.2)) {
-                            proxy.scrollTo(id, anchor: .bottom)
-                        }
-                    }
-                }
-            }
 
-            if showIndicator {
-                WorkingIndicatorView(state: state)
-                    .padding(.top, 4)
+                if showIndicator {
+                    WorkingIndicatorView(state: state)
+                        .padding(.top, 4)
+                }
             }
         }
     }
