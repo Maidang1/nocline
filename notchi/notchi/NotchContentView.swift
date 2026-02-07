@@ -22,6 +22,7 @@ struct NotchContentView: View {
     @State private var showingPanelSettings = false
     @State private var showingCredentials = false
     @State private var showingSessionActivity = false
+    @State private var isMuted = AppSettings.isMuted
 
     private var sessionStore: SessionStore {
         stateMachine.sessionStore
@@ -137,10 +138,16 @@ struct NotchContentView: View {
                         backButton
                             .padding(.leading, 15)
                     } else {
-                        PanelHeaderButton(
-                            sfSymbol: panelManager.isPinned ? "pin.fill" : "pin",
-                            action: { panelManager.togglePin() }
-                        )
+                        HStack(spacing: 6) {
+                            PanelHeaderButton(
+                                sfSymbol: panelManager.isPinned ? "pin.fill" : "pin",
+                                action: { panelManager.togglePin() }
+                            )
+                            PanelHeaderButton(
+                                sfSymbol: isMuted ? "bell.slash" : "bell",
+                                action: toggleMute
+                            )
+                        }
                         .padding(.leading, 15)
                     }
                     Spacer()
@@ -210,6 +217,11 @@ struct NotchContentView: View {
     private func openSettings() {
         panelManager.collapse()
         NotificationCenter.default.post(name: .notchiOpenSettings, object: nil)
+    }
+
+    private func toggleMute() {
+        AppSettings.toggleMute()
+        isMuted = AppSettings.isMuted
     }
 }
 

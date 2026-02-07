@@ -31,7 +31,7 @@ struct SoundPickerView: View {
                 Spacer()
 
                 HStack(spacing: 4) {
-                    Text(selectedSound.displayName)
+                    Text(AppSettings.isMuted ? "Muted" : selectedSound.displayName)
                         .font(.system(size: 11))
                         .foregroundColor(TerminalColors.secondaryText)
                     Image(systemName: selector.isPickerExpanded ? "chevron.up" : "chevron.down")
