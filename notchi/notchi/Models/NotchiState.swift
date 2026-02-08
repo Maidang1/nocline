@@ -1,12 +1,19 @@
 enum NotchiTask: String, CaseIterable {
-    case idle, working, sleeping, compacting
+    case idle, working, sleeping, compacting, waiting
 
     var animationFPS: Double { 4.0 }
+
+    var spritePrefix: String {
+        switch self {
+        case .waiting: return "idle"
+        default: return rawValue
+        }
+    }
 
     var bobDuration: Double {
         switch self {
         case .sleeping:   return 4.0
-        case .idle:       return 1.5
+        case .idle, .waiting: return 1.5
         case .working:    return 0.4
         case .compacting: return 0.5
         }
@@ -14,7 +21,7 @@ enum NotchiTask: String, CaseIterable {
 
     var canWalk: Bool {
         switch self {
-        case .sleeping, .compacting:
+        case .sleeping, .compacting, .waiting:
             return false
         case .idle, .working:
             return true
@@ -27,15 +34,16 @@ enum NotchiTask: String, CaseIterable {
         case .working:    return "Working..."
         case .sleeping:   return "Sleeping"
         case .compacting: return "Compacting..."
+        case .waiting:    return "Waiting..."
         }
     }
 
     var walkFrequencyRange: ClosedRange<Double> {
         switch self {
-        case .sleeping:   return 30.0...60.0
-        case .idle:       return 8.0...15.0
-        case .working:    return 5.0...12.0
-        case .compacting: return 15.0...25.0
+        case .sleeping, .waiting: return 30.0...60.0
+        case .idle:               return 8.0...15.0
+        case .working:            return 5.0...12.0
+        case .compacting:         return 15.0...25.0
         }
     }
 
@@ -60,7 +68,7 @@ struct NotchiState: Equatable {
     var task: NotchiTask
     var emotion: NotchiEmotion = .neutral
 
-    var spriteSheetName: String { "\(task.rawValue)_\(emotion.rawValue)" }
+    var spriteSheetName: String { "\(task.spritePrefix)_\(emotion.rawValue)" }
     var animationFPS: Double { task.animationFPS }
     var bobDuration: Double { task.bobDuration }
     var swayAmplitude: Double { emotion.swayAmplitude }
@@ -74,4 +82,5 @@ struct NotchiState: Equatable {
     static let working = NotchiState(task: .working)
     static let sleeping = NotchiState(task: .sleeping)
     static let compacting = NotchiState(task: .compacting)
+    static let waiting = NotchiState(task: .waiting)
 }

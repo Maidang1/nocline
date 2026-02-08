@@ -76,10 +76,14 @@ final class SessionStore {
         case "PreToolUse":
             let toolInput = event.toolInput?.mapValues { $0.value }
             session.recordPreToolUse(tool: event.tool, toolInput: toolInput, toolUseId: event.toolUseId)
-            session.updateState(.working)
+            if event.tool == "AskUserQuestion" {
+                session.updateState(.waiting)
+            } else {
+                session.updateState(.working)
+            }
 
         case "PermissionRequest":
-            session.updateState(.working)
+            session.updateState(.waiting)
 
         case "PostToolUse":
             let success = event.status != "error"

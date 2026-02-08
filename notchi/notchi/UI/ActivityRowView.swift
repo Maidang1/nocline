@@ -70,7 +70,8 @@ struct WorkingIndicatorView: View {
     private var statusText: String {
         switch state.task {
         case .compacting: return "Compacting"
-        default: return "Clanking"
+        case .waiting:    return "Waiting"
+        default:          return "Clanking"
         }
     }
 
