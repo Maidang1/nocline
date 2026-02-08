@@ -78,6 +78,7 @@ final class SessionStore {
             session.recordPreToolUse(tool: event.tool, toolInput: toolInput, toolUseId: event.toolUseId)
             if event.tool == "AskUserQuestion" {
                 session.updateState(.waiting)
+                session.setPendingQuestions(Self.parseQuestions(from: event.toolInput))
             } else {
                 session.updateState(.working)
             }
@@ -88,6 +89,7 @@ final class SessionStore {
         case "PostToolUse":
             let success = event.status != "error"
             session.recordPostToolUse(tool: event.tool, toolUseId: event.toolUseId, success: success)
+            session.clearPendingQuestions()
 
         case "Stop", "SubagentStop":
             session.updateState(.idle)
@@ -146,5 +148,21 @@ final class SessionStore {
     func dismissSession(_ sessionId: String) {
         sessions[sessionId]?.endSession()
         removeSession(sessionId)
+    }
+
+    private static func parseQuestions(from toolInput: [String: AnyCodable]?) -> [PendingQuestion] {
+        guard let input = toolInput?.mapValues({ $0.value }),
+              let questions = input["questions"] as? [[String: Any]] else { return [] }
+
+        return questions.compactMap { q in
+            guard let questionText = q["question"] as? String else { return nil }
+            let header = q["header"] as? String
+            let rawOptions = q["options"] as? [[String: Any]] ?? []
+            let options = rawOptions.compactMap { opt -> (label: String, description: String?)? in
+                guard let label = opt["label"] as? String else { return nil }
+                return (label: label, description: opt["description"] as? String)
+            }
+            return PendingQuestion(question: questionText, header: header, options: options)
+        }
     }
 }

@@ -187,6 +187,12 @@ struct ExpandedPanelView: View {
                                             .id(item.id)
                                     }
                                 }
+
+                                let questions = effectiveSession?.pendingQuestions ?? []
+                                if !questions.isEmpty {
+                                    QuestionPromptView(questions: questions)
+                                        .id("question-prompt")
+                                }
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }
@@ -200,6 +206,13 @@ struct ExpandedPanelView: View {
                             if let id = newId {
                                 withAnimation(.easeOut(duration: 0.2)) {
                                     proxy.scrollTo(id, anchor: .bottom)
+                                }
+                            }
+                        }
+                        .onChange(of: effectiveSession?.pendingQuestions.isEmpty) { _, isEmpty in
+                            if isEmpty == false {
+                                withAnimation(.easeOut(duration: 0.2)) {
+                                    proxy.scrollTo("question-prompt", anchor: .bottom)
                                 }
                             }
                         }

@@ -55,6 +55,10 @@ tool_id = input_data.get('tool_use_id', '')
 if tool_id:
     output['tool_use_id'] = tool_id
 
+tool_input = input_data.get('tool_input', {})
+if tool_input:
+    output['tool_input'] = tool_input
+
 try:
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     sock.connect('$SOCKET_PATH')

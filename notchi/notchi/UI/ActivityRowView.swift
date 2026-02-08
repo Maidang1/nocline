@@ -54,6 +54,126 @@ struct ActivityRowView: View {
     }
 }
 
+struct QuestionPromptView: View {
+    let questions: [PendingQuestion]
+    @State private var currentIndex = 0
+
+    private var clampedIndex: Int {
+        min(currentIndex, questions.count - 1)
+    }
+
+    private var current: PendingQuestion {
+        questions[clampedIndex]
+    }
+
+    private var hasMultipleQuestions: Bool {
+        questions.count > 1
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            questionHeader
+            questionText
+            optionsList
+            answerHint
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(TerminalColors.subtleBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(TerminalColors.claudeOrange.opacity(0.3), lineWidth: 1)
+        )
+        .padding(.vertical, 4)
+        .onChange(of: questions.count) {
+            currentIndex = 0
+        }
+    }
+
+    private var questionHeader: some View {
+        HStack {
+            if let header = current.header {
+                Text(header)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(TerminalColors.claudeOrange)
+                    .textCase(.uppercase)
+                    .tracking(0.5)
+            }
+
+            if hasMultipleQuestions {
+                Text("(\(clampedIndex + 1)/\(questions.count))")
+                    .font(.system(size: 10, weight: .medium).monospacedDigit())
+                    .foregroundColor(TerminalColors.secondaryText)
+            }
+
+            Spacer()
+
+            if hasMultipleQuestions {
+                paginationControls
+            }
+        }
+    }
+
+    private var paginationControls: some View {
+        HStack(spacing: 2) {
+            Button(action: { currentIndex = max(0, currentIndex - 1) }) {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(currentIndex > 0 ? TerminalColors.primaryText : TerminalColors.dimmedText)
+            }
+            .buttonStyle(.plain)
+            .disabled(currentIndex == 0)
+
+            Button(action: { currentIndex = min(questions.count - 1, currentIndex + 1) }) {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(currentIndex < questions.count - 1 ? TerminalColors.primaryText : TerminalColors.dimmedText)
+            }
+            .buttonStyle(.plain)
+            .disabled(currentIndex == questions.count - 1)
+        }
+    }
+
+    private var questionText: some View {
+        Text(current.question)
+            .font(.system(size: 12, weight: .medium))
+            .foregroundColor(TerminalColors.primaryText)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var optionsList: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(Array(current.options.enumerated()), id: \.offset) { index, option in
+                HStack(alignment: .top, spacing: 6) {
+                    Text("\(index + 1).")
+                        .font(.system(size: 11, weight: .semibold).monospacedDigit())
+                        .foregroundColor(TerminalColors.claudeOrange)
+                        .frame(width: 16, alignment: .trailing)
+
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(option.label)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(TerminalColors.primaryText)
+                        if let desc = option.description {
+                            Text(desc)
+                                .font(.system(size: 10))
+                                .foregroundColor(TerminalColors.dimmedText)
+                                .lineLimit(2)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var answerHint: some View {
+        Text("Answer in terminal")
+            .font(.system(size: 10).italic())
+            .foregroundColor(TerminalColors.dimmedText)
+    }
+}
+
 struct WorkingIndicatorView: View {
     let state: NotchiState
     @State private var dotCount = 1

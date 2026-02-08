@@ -3,6 +3,12 @@ import os.log
 
 private let logger = Logger(subsystem: "com.ruban.notchi", category: "SessionData")
 
+struct PendingQuestion {
+    let question: String
+    let header: String?
+    let options: [(label: String, description: String?)]
+}
+
 @MainActor
 @Observable
 final class SessionData: Identifiable {
@@ -19,6 +25,7 @@ final class SessionData: Identifiable {
     private(set) var lastUserPrompt: String?
     private(set) var promptSubmitTime: Date?
     private(set) var permissionMode: String = "default"
+    private(set) var pendingQuestions: [PendingQuestion] = []
 
     private var durationTimer: Task<Void, Never>?
     private(set) var formattedDuration: String = "0m 00s"
@@ -87,6 +94,15 @@ final class SessionData: Identifiable {
 
     func updatePermissionMode(_ mode: String) {
         permissionMode = mode
+    }
+
+    func setPendingQuestions(_ questions: [PendingQuestion]) {
+        pendingQuestions = questions
+        lastActivity = Date()
+    }
+
+    func clearPendingQuestions() {
+        pendingQuestions = []
     }
 
     func recordPreToolUse(tool: String?, toolInput: [String: Any]?, toolUseId: String?) {
