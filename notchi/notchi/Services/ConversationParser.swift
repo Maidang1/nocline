@@ -119,18 +119,13 @@ actor ConversationParser {
                 }
             }
 
-            // Only add if we have text content
-            guard !textParts.isEmpty else { continue }
-
-            // Note: We no longer filter by promptSubmitTime here.
-            // clearAssistantMessages() is called on new prompts, so old messages
-            // are already cleared. The timestamp filter caused issues due to
-            // clock skew between Notchi (Date()) and Claude's JSONL timestamps.
+            // Only add if we have non-empty text content
+            let fullText = textParts.joined(separator: "\n")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !fullText.isEmpty else { continue }
 
             // Only mark as seen AFTER passing all filters
             seen.insert(uuid)
-
-            let fullText = textParts.joined(separator: "\n")
             messages.append(AssistantMessage(
                 id: uuid,
                 text: fullText,

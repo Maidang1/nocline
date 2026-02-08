@@ -20,11 +20,11 @@ struct AssistantTextRowView: View {
                 .frame(width: 5, height: 5)
                 .padding(.top, 6)
 
-            Text(isExpanded ? cleanedText : truncatedText)
-                .font(.system(size: 13))
-                .foregroundColor(.white)
-                .lineLimit(isExpanded ? nil : 2)
-                .multilineTextAlignment(.leading)
+            if isExpanded {
+                MarkdownText(cleanedText)
+            } else {
+                inlineMarkdownText
+            }
 
             Spacer(minLength: 8)
 
@@ -43,6 +43,18 @@ struct AssistantTextRowView: View {
                 isExpanded.toggle()
             }
         }
+    }
+
+    private var inlineMarkdownText: some View {
+        let attributed = try? AttributedString(
+            markdown: truncatedText,
+            options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        )
+        return Text(attributed ?? AttributedString(truncatedText))
+            .font(.system(size: 13))
+            .foregroundColor(.white)
+            .lineLimit(2)
+            .multilineTextAlignment(.leading)
     }
 
     private var isTruncatable: Bool {
