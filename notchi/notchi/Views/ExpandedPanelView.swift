@@ -84,23 +84,29 @@ struct ExpandedPanelView: View {
     @ViewBuilder
     private func sessionPickerContent(geometry: GeometryProxy) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Spacer()
-                .frame(height: geometry.size.height * 0.3)
+            if isActivityCollapsed {
+                Spacer()
+            } else {
+                Spacer()
+                    .frame(height: geometry.size.height * 0.3)
+            }
 
             VStack(alignment: .leading, spacing: 0) {
-                Divider().background(Color.white.opacity(0.08))
+                if !isActivityCollapsed {
+                    Divider().background(Color.white.opacity(0.08))
 
-                SessionListView(
-                    sessions: sessionStore.sortedSessions,
-                    selectedSessionId: sessionStore.selectedSessionId,
-                    onSelectSession: { sessionId in
-                        sessionStore.selectSession(sessionId)
-                        showingSessionActivity = true
-                    },
-                    onDeleteSession: { sessionId in
-                        sessionStore.dismissSession(sessionId)
-                    }
-                )
+                    SessionListView(
+                        sessions: sessionStore.sortedSessions,
+                        selectedSessionId: sessionStore.selectedSessionId,
+                        onSelectSession: { sessionId in
+                            sessionStore.selectSession(sessionId)
+                            showingSessionActivity = true
+                        },
+                        onDeleteSession: { sessionId in
+                            sessionStore.dismissSession(sessionId)
+                        }
+                    )
+                }
 
                 UsageBarView(
                     usage: usageService.currentUsage,

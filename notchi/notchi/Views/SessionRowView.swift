@@ -27,12 +27,6 @@ struct SessionRowView: View {
                             .foregroundColor(TerminalColors.dimmedText)
                             .lineLimit(1)
                     }
-
-                    #if DEBUG
-                    Text("msgs: \(session.recentAssistantMessages.count)")
-                        .font(.system(size: 8))
-                        .foregroundColor(.red)
-                    #endif
                 }
 
                 Spacer()
