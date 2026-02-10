@@ -4,7 +4,7 @@ struct UsageBarView: View {
     let usage: QuotaPeriod?
     let isLoading: Bool
     let error: String?
-    let onSettingsTap: () -> Void
+    var onConnect: (() -> Void)?
 
     private var isStale: Bool {
         error != nil && usage != nil
@@ -21,27 +21,34 @@ struct UsageBarView: View {
     }
 
     var body: some View {
-        if KeychainManager.hasCredentials {
-            connectedView
+        if !AppSettings.isUsageEnabled {
+            Button(action: { onConnect?() }) {
+                HStack(spacing: 4) {
+                    Image(systemName: "lock.shield")
+                        .font(.system(size: 10))
+                    Text("Tap to show Claude usage")
+                        .font(.system(size: 11, weight: .medium))
+                }
+                .foregroundColor(TerminalColors.dimmedText)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+            .padding(.bottom, -10)
         } else {
-            unconfiguredView
+            connectedView
         }
     }
 
     private var connectedView: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                if let error, usage == nil {
-                    Button(action: onSettingsTap) {
-                        HStack(spacing: 4) {
-                            Text(error)
-                            Text("– Tap to fix")
-                                .foregroundColor(TerminalColors.secondaryText)
-                        }
-                        .font(.system(size: 10))
-                        .foregroundColor(TerminalColors.red)
+                if error != nil, usage == nil {
+                    Button(action: { onConnect?() }) {
+                        Text("Tap to connect usage tracking")
+                            .font(.system(size: 11, weight: .medium))
                     }
                     .buttonStyle(.plain)
+                    .foregroundColor(TerminalColors.dimmedText)
                 } else if let usage, let resetTime = usage.formattedResetTime {
                     HStack(spacing: 4) {
                         Text("Resets in \(resetTime)")
@@ -90,22 +97,4 @@ struct UsageBarView: View {
         .frame(height: 4)
     }
 
-    private var unconfiguredView: some View {
-        Button(action: onSettingsTap) {
-            HStack(spacing: 6) {
-                Image(systemName: "gauge.with.dots.needle.33percent")
-                    .font(.system(size: 11))
-                Text("Configure usage tracking")
-                    .font(.system(size: 11))
-            }
-            .foregroundColor(TerminalColors.secondaryText)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.vertical, 8)
-            .padding(.horizontal, 10)
-            .background(TerminalColors.subtleBackground)
-            .cornerRadius(6)
-        }
-        .buttonStyle(.plain)
-        .padding(.top, 5)
-    }
 }

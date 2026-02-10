@@ -2,10 +2,10 @@ import ServiceManagement
 import SwiftUI
 
 struct PanelSettingsView: View {
-    @Binding var showingCredentials: Bool
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var hooksInstalled = HookInstaller.isInstalled()
     @State private var hooksError = false
+    private var usageConnected: Bool { ClaudeUsageService.shared.isConnected }
 
     private var hookStatusText: String {
         if hooksError { return "Error" }
@@ -15,18 +15,6 @@ struct PanelSettingsView: View {
 
     private var hookStatusColor: Color {
         hooksInstalled && !hooksError ? TerminalColors.green : TerminalColors.red
-    }
-
-    private var isCredentialsConfigured: Bool {
-        KeychainManager.hasCredentials
-    }
-
-    private var credentialsStatusText: String {
-        isCredentialsConfigured ? "Configured" : "Not Configured"
-    }
-
-    private var credentialsStatusColor: Color {
-        isCredentialsConfigured ? TerminalColors.green : TerminalColors.red
     }
 
     var body: some View {
@@ -76,14 +64,12 @@ struct PanelSettingsView: View {
             }
             .buttonStyle(.plain)
 
-            Button(action: { showingCredentials = true }) {
+            Button(action: connectUsage) {
                 SettingsRowView(icon: "gauge.with.dots.needle.33percent", title: "Claude Usage") {
-                    HStack(spacing: 4) {
-                        statusBadge(credentialsStatusText, color: credentialsStatusColor)
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 10))
-                            .foregroundColor(TerminalColors.dimmedText)
-                    }
+                    statusBadge(
+                        usageConnected ? "Connected" : "Not Connected",
+                        color: usageConnected ? TerminalColors.green : TerminalColors.dimmedText
+                    )
                 }
             }
             .buttonStyle(.plain)
@@ -144,6 +130,10 @@ struct PanelSettingsView: View {
         } catch {
             print("Failed to toggle launch at login: \(error)")
         }
+    }
+
+    private func connectUsage() {
+        ClaudeUsageService.shared.connectAndStartPolling()
     }
 
     private func installHooksIfNeeded() {
@@ -218,7 +208,7 @@ struct ToggleSwitch: View {
 }
 
 #Preview {
-    PanelSettingsView(showingCredentials: .constant(false))
+    PanelSettingsView()
         .frame(width: 402, height: 400)
         .background(Color.black)
 }

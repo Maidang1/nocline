@@ -11,7 +11,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         observeScreenChanges()
         startHookServices()
         startUsageService()
-        observeSettingsRequest()
     }
 
     private func startHookServices() {
@@ -75,16 +74,4 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ClaudeUsageService.shared.startPolling()
     }
 
-    private func observeSettingsRequest() {
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(openSettings),
-            name: .notchiOpenSettings,
-            object: nil
-        )
-    }
-
-    @objc private func openSettings() {
-        SettingsWindowController.shared.showSettings()
-    }
 }

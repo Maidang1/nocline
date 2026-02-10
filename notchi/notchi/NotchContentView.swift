@@ -7,7 +7,6 @@ enum NotchConstants {
 
 extension Notification.Name {
     static let notchiShouldCollapse = Notification.Name("notchiShouldCollapse")
-    static let notchiOpenSettings = Notification.Name("notchiOpenSettings")
 }
 
 private let cornerRadiusInsets = (
@@ -20,7 +19,6 @@ struct NotchContentView: View {
     var panelManager: NotchPanelManager = .shared
     var usageService: ClaudeUsageService = .shared
     @State private var showingPanelSettings = false
-    @State private var showingCredentials = false
     @State private var showingSessionActivity = false
     @State private var isMuted = AppSettings.isMuted
     @State private var isActivityCollapsed = false
@@ -56,7 +54,7 @@ struct NotchContentView: View {
     }
 
     private var shouldShowBackButton: Bool {
-        showingPanelSettings || showingCredentials ||
+        showingPanelSettings ||
         (sessionStore.activeSessionCount >= 2 && showingSessionActivity)
     }
 
@@ -114,7 +112,6 @@ struct NotchContentView: View {
         .onChange(of: isExpanded) { _, expanded in
             if !expanded {
                 showingPanelSettings = false
-                showingCredentials = false
                 showingSessionActivity = false
             }
         }
@@ -137,10 +134,8 @@ struct NotchContentView: View {
                         sessionStore: sessionStore,
                         usageService: usageService,
                         showingSettings: $showingPanelSettings,
-                        showingCredentials: $showingCredentials,
                         showingSessionActivity: $showingSessionActivity,
-                        isActivityCollapsed: $isActivityCollapsed,
-                        onSettingsTap: { openSettings() }
+                        isActivityCollapsed: $isActivityCollapsed
                     )
                     .frame(
                         width: NotchConstants.expandedPanelSize.width - 48,
@@ -207,9 +202,7 @@ struct NotchContentView: View {
     }
 
     private func goBack() {
-        if showingCredentials {
-            showingCredentials = false
-        } else if showingPanelSettings {
+        if showingPanelSettings {
             showingPanelSettings = false
         } else if showingSessionActivity {
             showingSessionActivity = false
@@ -240,8 +233,7 @@ struct NotchContentView: View {
     }
 
     private func openSettings() {
-        panelManager.collapse()
-        NotificationCenter.default.post(name: .notchiOpenSettings, object: nil)
+        showingPanelSettings = true
     }
 
     private func toggleMute() {

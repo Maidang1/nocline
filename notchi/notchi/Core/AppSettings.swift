@@ -4,6 +4,12 @@ struct AppSettings {
     private static let notificationSoundKey = "notificationSound"
     private static let isMutedKey = "isMuted"
     private static let previousSoundKey = "previousNotificationSound"
+    private static let isUsageEnabledKey = "isUsageEnabled"
+
+    static var isUsageEnabled: Bool {
+        get { UserDefaults.standard.bool(forKey: isUsageEnabledKey) }
+        set { UserDefaults.standard.set(newValue, forKey: isUsageEnabledKey) }
+    }
 
     static var notificationSound: NotificationSound {
         get {

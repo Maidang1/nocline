@@ -2,9 +2,11 @@ import Foundation
 
 struct UsageResponse: Decodable {
     let fiveHour: QuotaPeriod?
+    let sevenDay: QuotaPeriod?
 
     enum CodingKeys: String, CodingKey {
         case fiveHour = "five_hour"
+        case sevenDay = "seven_day"
     }
 }
 

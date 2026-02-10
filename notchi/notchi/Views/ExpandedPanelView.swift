@@ -23,10 +23,8 @@ struct ExpandedPanelView: View {
     let sessionStore: SessionStore
     let usageService: ClaudeUsageService
     @Binding var showingSettings: Bool
-    @Binding var showingCredentials: Bool
     @Binding var showingSessionActivity: Bool
     @Binding var isActivityCollapsed: Bool
-    let onSettingsTap: () -> Void
 
     private var effectiveSession: SessionData? {
         sessionStore.effectiveSession
@@ -62,11 +60,8 @@ struct ExpandedPanelView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            if showingCredentials {
-                CredentialsFormView()
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
-            } else if showingSettings {
-                PanelSettingsView(showingCredentials: $showingCredentials)
+            if showingSettings {
+                PanelSettingsView()
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             } else if shouldShowSessionPicker {
                 sessionPickerContent(geometry: geometry)
@@ -77,7 +72,6 @@ struct ExpandedPanelView: View {
             }
         }
         .animation(.easeInOut(duration: 0.25), value: showingSettings)
-        .animation(.easeInOut(duration: 0.25), value: showingCredentials)
         .animation(.easeInOut(duration: 0.25), value: shouldShowSessionPicker)
     }
 
@@ -108,11 +102,13 @@ struct ExpandedPanelView: View {
                     )
                 }
 
+                Spacer()
+
                 UsageBarView(
                     usage: usageService.currentUsage,
                     isLoading: usageService.isLoading,
                     error: usageService.error,
-                    onSettingsTap: onSettingsTap
+                    onConnect: { ClaudeUsageService.shared.connectAndStartPolling() }
                 )
             }
             .padding(.horizontal, 12)
@@ -138,14 +134,15 @@ struct ExpandedPanelView: View {
                 } else if !isActivityCollapsed {
                     Spacer()
                     emptyState
-                    Spacer()
                 }
+
+                Spacer()
 
                 UsageBarView(
                     usage: usageService.currentUsage,
                     isLoading: usageService.isLoading,
                     error: usageService.error,
-                    onSettingsTap: onSettingsTap
+                    onConnect: { ClaudeUsageService.shared.connectAndStartPolling() }
                 )
             }
             .padding(.horizontal, 12)
