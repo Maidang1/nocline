@@ -11,6 +11,11 @@ struct AppSettings {
         set { UserDefaults.standard.set(newValue, forKey: isUsageEnabledKey) }
     }
 
+    static var anthropicApiKey: String? {
+        get { KeychainManager.getAnthropicApiKey() }
+        set { KeychainManager.setAnthropicApiKey(newValue) }
+    }
+
     static var notificationSound: NotificationSound {
         get {
             guard let rawValue = UserDefaults.standard.string(forKey: notificationSoundKey),

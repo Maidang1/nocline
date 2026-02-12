@@ -5,7 +5,9 @@ struct PanelSettingsView: View {
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var hooksInstalled = HookInstaller.isInstalled()
     @State private var hooksError = false
+    @State private var apiKeyInput = AppSettings.anthropicApiKey ?? ""
     private var usageConnected: Bool { ClaudeUsageService.shared.isConnected }
+    private var hasApiKey: Bool { !apiKeyInput.isEmpty }
 
     private var hookStatusText: String {
         if hooksError { return "Error" }
@@ -73,7 +75,45 @@ struct PanelSettingsView: View {
                 }
             }
             .buttonStyle(.plain)
+
+            apiKeyRow
         }
+    }
+
+    private var apiKeyRow: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            SettingsRowView(icon: "brain", title: "Emotion Analysis") {
+                statusBadge(
+                    hasApiKey ? "Active" : "No Key",
+                    color: hasApiKey ? TerminalColors.green : TerminalColors.dimmedText
+                )
+            }
+
+            HStack(spacing: 6) {
+                SecureField("Anthropic API Key", text: $apiKeyInput)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(TerminalColors.primaryText)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(Color.white.opacity(0.06))
+                    .cornerRadius(6)
+                    .onSubmit { saveApiKey() }
+
+                Button(action: saveApiKey) {
+                    Image(systemName: hasApiKey ? "checkmark.circle.fill" : "arrow.right.circle")
+                        .font(.system(size: 14))
+                        .foregroundColor(hasApiKey ? TerminalColors.green : TerminalColors.dimmedText)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.leading, 28)
+        }
+    }
+
+    private func saveApiKey() {
+        let trimmed = apiKeyInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        AppSettings.anthropicApiKey = trimmed.isEmpty ? nil : trimmed
     }
 
     private var actionsSection: some View {

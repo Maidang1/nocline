@@ -11,6 +11,7 @@ final class NotchiStateMachine {
     let sessionStore = SessionStore.shared
 
     private var sleepTimer: Task<Void, Never>?
+    private var emotionDecayTimer: Task<Void, Never>?
     private var pendingSyncTasks: [String: Task<Void, Never>] = [:]
     private var pendingPositionMarks: [String: Task<Void, Never>] = [:]
     private var fileWatchers: [String: (source: DispatchSourceFileSystemObject, fd: Int32)] = [:]
@@ -24,10 +25,12 @@ final class NotchiStateMachine {
 
     private init() {
         startSleepTimer()
+        startEmotionDecayTimer()
     }
 
     func handleEvent(_ event: HookEvent) {
         cancelSleepTimer()
+        restartEmotionDecayTimer()
 
         let session = sessionStore.process(event)
         let isDone = event.status == "waiting_for_input"
@@ -41,6 +44,13 @@ final class NotchiStateMachine {
                 )
             }
             startFileWatcher(sessionId: event.sessionId, cwd: event.cwd)
+
+            if let prompt = event.userPrompt {
+                Task {
+                    let result = await EmotionAnalyzer.shared.analyze(prompt)
+                    EmotionState.shared.recordEmotion(result.emotion, intensity: result.intensity, prompt: prompt)
+                }
+            }
 
         case "PreToolUse":
             if isDone {
@@ -150,5 +160,20 @@ final class NotchiStateMachine {
         guard let watcher = fileWatchers.removeValue(forKey: sessionId) else { return }
         watcher.source.cancel()
         logger.debug("Stopped file watcher for session \(sessionId)")
+    }
+
+    private func startEmotionDecayTimer() {
+        emotionDecayTimer = Task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: EmotionState.decayInterval)
+                guard !Task.isCancelled else { return }
+                EmotionState.shared.decayAll()
+            }
+        }
+    }
+
+    private func restartEmotionDecayTimer() {
+        emotionDecayTimer?.cancel()
+        startEmotionDecayTimer()
     }
 }

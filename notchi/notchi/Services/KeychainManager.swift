@@ -4,6 +4,8 @@ import Security
 
 enum KeychainManager {
     private static let claudeCodeService = "Claude Code-credentials"
+    private static let notchiService = "com.ruban.notchi"
+    private static let anthropicApiKeyAccount = "anthropicApiKey"
 
     static func getAccessToken() -> String? {
         extractAccessToken(from: readClaudeCodeCredentials(allowInteraction: true))
@@ -12,6 +14,22 @@ enum KeychainManager {
     static func getAccessTokenSilently() -> String? {
         extractAccessToken(from: readClaudeCodeCredentials(allowInteraction: false))
     }
+
+    // MARK: - Anthropic API Key
+
+    static func getAnthropicApiKey() -> String? {
+        readString(service: notchiService, account: anthropicApiKeyAccount)
+    }
+
+    static func setAnthropicApiKey(_ key: String?) {
+        if let key, !key.isEmpty {
+            saveString(key, service: notchiService, account: anthropicApiKeyAccount)
+        } else {
+            deleteItem(service: notchiService, account: anthropicApiKeyAccount)
+        }
+    }
+
+    // MARK: - Claude Code Credentials
 
     private static func extractAccessToken(from json: [String: Any]?) -> String? {
         guard let json,
@@ -46,5 +64,56 @@ enum KeychainManager {
         }
 
         return json
+    }
+
+    // MARK: - Generic Keychain Helpers
+
+    private static func readString(service: String, account: String) -> String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+
+        guard status == errSecSuccess,
+              let data = result as? Data,
+              let string = String(data: data, encoding: .utf8) else {
+            return nil
+        }
+
+        return string
+    }
+
+    private static func saveString(_ value: String, service: String, account: String) {
+        let data = Data(value.utf8)
+
+        // Try to update existing item first
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account
+        ]
+        let update: [String: Any] = [kSecValueData as String: data]
+        let status = SecItemUpdate(query as CFDictionary, update as CFDictionary)
+
+        if status == errSecItemNotFound {
+            var addQuery = query
+            addQuery[kSecValueData as String] = data
+            SecItemAdd(addQuery as CFDictionary, nil)
+        }
+    }
+
+    private static func deleteItem(service: String, account: String) {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account
+        ]
+        SecItemDelete(query as CFDictionary)
     }
 }
