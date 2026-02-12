@@ -12,15 +12,29 @@ final class ClaudeUsageService {
     var error: String?
     var isConnected = false
 
+    private static let usageURL = URL(string: "https://api.anthropic.com/api/oauth/usage")!
+    private static let authFailureStatusCodes: Set<Int> = [401, 403]
+
     private var pollTimer: Timer?
     private let pollInterval: TimeInterval = 60
+    private var cachedToken: String?
 
     private init() {}
 
     func connectAndStartPolling() {
         AppSettings.isUsageEnabled = true
         error = nil
-        startPolling()
+        stopPolling()
+
+        Task {
+            guard let accessToken = KeychainManager.getAccessToken() else {
+                error = "Keychain access required"
+                isConnected = false
+                AppSettings.isUsageEnabled = false
+                return
+            }
+            await fetchAndStartPolling(with: accessToken)
+        }
     }
 
     func startPolling() {
@@ -32,16 +46,14 @@ final class ClaudeUsageService {
         stopPolling()
 
         Task {
-            await fetchUsage()
-        }
-
-        pollTimer = Timer.scheduledTimer(withTimeInterval: pollInterval, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                await self?.fetchUsage()
+            guard let accessToken = KeychainManager.getAccessTokenSilently() else {
+                logger.info("Silent keychain access unavailable, resetting to disconnected")
+                isConnected = false
+                AppSettings.isUsageEnabled = false
+                return
             }
+            await fetchAndStartPolling(with: accessToken)
         }
-
-        logger.info("Started usage polling (every \(self.pollInterval)s)")
     }
 
     func stopPolling() {
@@ -49,29 +61,39 @@ final class ClaudeUsageService {
         pollTimer = nil
     }
 
-    func fetchUsage() async {
-        guard let accessToken = KeychainManager.getAccessToken() else {
-            error = "Keychain access required"
-            isConnected = false
-            AppSettings.isUsageEnabled = false
+    private func fetchAndStartPolling(with accessToken: String) async {
+        cachedToken = accessToken
+        await performFetch(with: accessToken)
+        if isConnected { schedulePollTimer() }
+    }
+
+    private func schedulePollTimer() {
+        pollTimer = Timer.scheduledTimer(withTimeInterval: pollInterval, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                await self?.fetchUsage()
+            }
+        }
+        logger.info("Started usage polling (every \(self.pollInterval)s)")
+    }
+
+    private func fetchUsage() async {
+        guard let accessToken = cachedToken else {
+            logger.warning("No cached token available, stopping polling")
             stopPolling()
             return
         }
 
-        isConnected = true
+        await performFetch(with: accessToken)
+    }
 
+    private func performFetch(with accessToken: String) async {
+        isConnected = true
         isLoading = true
         error = nil
 
         defer { isLoading = false }
 
-        guard let url = URL(string: "https://api.anthropic.com/api/oauth/usage") else {
-            error = "Invalid URL"
-            return
-        }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
+        var request = URLRequest(url: Self.usageURL)
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("oauth-2025-04-20", forHTTPHeaderField: "anthropic-beta")
@@ -86,8 +108,11 @@ final class ClaudeUsageService {
             }
 
             guard httpResponse.statusCode == 200 else {
-                if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
+                if Self.authFailureStatusCodes.contains(httpResponse.statusCode) {
+                    cachedToken = nil
                     error = "Token expired"
+                    isConnected = false
+                    stopPolling()
                 } else {
                     error = "HTTP \(httpResponse.statusCode)"
                 }
