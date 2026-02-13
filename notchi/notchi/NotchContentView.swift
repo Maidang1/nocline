@@ -77,6 +77,7 @@ struct NotchContentView: View {
                     sessions: sessionStore.sortedSessions,
                     selectedSessionId: sessionStore.selectedSessionId,
                     onSelectSession: { sessionId in
+                        guard sessionStore.activeSessionCount >= 2 else { return }
                         sessionStore.selectSession(sessionId)
                         showingSessionActivity = true
                     }

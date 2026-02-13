@@ -51,6 +51,12 @@ struct GrassIslandView: View {
     }
 }
 
+private struct NoHighlightButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+    }
+}
+
 private struct GrassSpriteView: View {
     let state: NotchiState
     var isSelected: Bool = false
@@ -61,6 +67,8 @@ private struct GrassSpriteView: View {
 
     @State private var isSwayingRight = true
     @State private var isBobUp = true
+    @State private var isHovered = false
+    @State private var tapScale: CGFloat = 1.0
 
     private let spriteSize: CGFloat = 64
     private let swayDuration: Double = 2.0
@@ -72,8 +80,14 @@ private struct GrassSpriteView: View {
 
     private let glowColor = Color(red: 0.4, green: 0.7, blue: 1.0)
 
+    private var glowOpacity: Double {
+        if isSelected { return 0.7 }
+        if isHovered { return 0.3 }
+        return 0
+    }
+
     var body: some View {
-        Button(action: { onTap?() }) {
+        Button(action: handleTap) {
             SpriteSheetView(
                 spriteSheet: state.spriteSheetName,
                 frameCount: state.frameCount,
@@ -83,16 +97,18 @@ private struct GrassSpriteView: View {
             )
             .frame(width: spriteSize, height: spriteSize)
             .background(alignment: .bottom) {
-                if isSelected {
+                if glowOpacity > 0 {
                     Ellipse()
-                        .fill(glowColor.opacity(0.35))
-                        .frame(width: spriteSize * 0.7, height: spriteSize * 0.2)
-                        .blur(radius: 6)
+                        .fill(glowColor.opacity(glowOpacity))
+                        .frame(width: spriteSize * 0.85, height: spriteSize * 0.25)
+                        .blur(radius: 8)
                         .offset(y: 4)
                 }
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(NoHighlightButtonStyle())
+        .onHover { isHovered = $0 }
+        .scaleEffect(tapScale)
         .rotationEffect(.degrees(isSwayingRight ? state.swayAmplitude : -state.swayAmplitude), anchor: .bottom)
         .offset(x: xOffset, y: yOffset + (isBobUp ? -bobAmplitude : bobAmplitude))
         .onAppear {
@@ -120,5 +136,14 @@ private struct GrassSpriteView: View {
         withAnimation(.easeInOut(duration: state.bobDuration).repeatForever(autoreverses: true)) {
             isBobUp.toggle()
         }
+    }
+
+    private func handleTap() {
+        withAnimation(.spring(response: 0.2, dampingFraction: 0.5)) { tapScale = 1.15 }
+        Task {
+            try? await Task.sleep(for: .milliseconds(150))
+            withAnimation(.spring(response: 0.2, dampingFraction: 0.7)) { tapScale = 1.0 }
+        }
+        onTap?()
     }
 }
