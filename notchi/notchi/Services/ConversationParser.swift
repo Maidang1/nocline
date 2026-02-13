@@ -37,22 +37,21 @@ actor ConversationParser {
             return []
         }
 
-        let lastOffset = lastFileOffset[sessionId] ?? 0
+        var currentOffset = lastFileOffset[sessionId] ?? 0
 
         // File was truncated or reset - start fresh
-        if fileSize < lastOffset {
-            lastFileOffset[sessionId] = 0
+        if fileSize < currentOffset {
+            currentOffset = 0
             seenMessageIds[sessionId] = []
-            return parseIncremental(sessionId: sessionId, cwd: cwd)
         }
 
         // No new content
-        if fileSize == lastOffset {
+        if fileSize == currentOffset {
             return []
         }
 
         do {
-            try fileHandle.seek(toOffset: lastOffset)
+            try fileHandle.seek(toOffset: currentOffset)
         } catch {
             return []
         }

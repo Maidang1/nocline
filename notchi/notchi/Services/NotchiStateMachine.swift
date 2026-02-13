@@ -70,6 +70,9 @@ final class NotchiStateMachine {
 
         case "SessionEnd":
             stopFileWatcher(sessionId: event.sessionId)
+            pendingSyncTasks.removeValue(forKey: event.sessionId)?.cancel()
+            pendingPositionMarks.removeValue(forKey: event.sessionId)?.cancel()
+            Task { await ConversationParser.shared.resetState(for: event.sessionId) }
             if sessionStore.activeSessionCount == 0 {
                 transitionGlobal(to: .idle)
             }
