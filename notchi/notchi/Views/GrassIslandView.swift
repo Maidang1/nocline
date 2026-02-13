@@ -2,6 +2,8 @@ import SwiftUI
 
 struct GrassIslandView: View {
     let sessions: [SessionData]
+    var selectedSessionId: String?
+    var onSelectSession: ((String) -> Void)?
 
     private let patchWidth: CGFloat = 80
 
@@ -26,9 +28,11 @@ struct GrassIslandView: View {
                     ForEach(depthSortedSessions) { session in
                         GrassSpriteView(
                             state: session.state,
+                            isSelected: session.id == selectedSessionId,
                             xPosition: session.spriteXPosition,
                             yOffset: session.spriteYOffset,
-                            totalWidth: geometry.size.width
+                            totalWidth: geometry.size.width,
+                            onTap: { onSelectSession?(session.id) }
                         )
                     }
                 }
@@ -49,9 +53,11 @@ struct GrassIslandView: View {
 
 private struct GrassSpriteView: View {
     let state: NotchiState
+    var isSelected: Bool = false
     let xPosition: CGFloat
     let yOffset: CGFloat
     let totalWidth: CGFloat
+    var onTap: (() -> Void)?
 
     @State private var isSwayingRight = true
     @State private var isBobUp = true
@@ -64,15 +70,29 @@ private struct GrassSpriteView: View {
     private let usableWidthFraction: CGFloat = 0.8
     private let leftMarginFraction: CGFloat = 0.1
 
+    private let glowColor = Color(red: 0.4, green: 0.7, blue: 1.0)
+
     var body: some View {
-        SpriteSheetView(
-            spriteSheet: state.spriteSheetName,
-            frameCount: state.frameCount,
-            columns: state.columns,
-            fps: state.animationFPS,
-            isAnimating: true
-        )
-        .frame(width: spriteSize, height: spriteSize)
+        Button(action: { onTap?() }) {
+            SpriteSheetView(
+                spriteSheet: state.spriteSheetName,
+                frameCount: state.frameCount,
+                columns: state.columns,
+                fps: state.animationFPS,
+                isAnimating: true
+            )
+            .frame(width: spriteSize, height: spriteSize)
+            .background(alignment: .bottom) {
+                if isSelected {
+                    Ellipse()
+                        .fill(glowColor.opacity(0.35))
+                        .frame(width: spriteSize * 0.7, height: spriteSize * 0.2)
+                        .blur(radius: 6)
+                        .offset(y: 4)
+                }
+            }
+        }
+        .buttonStyle(.plain)
         .rotationEffect(.degrees(isSwayingRight ? state.swayAmplitude : -state.swayAmplitude), anchor: .bottom)
         .offset(x: xOffset, y: yOffset + (isBobUp ? -bobAmplitude : bobAmplitude))
         .onAppear {

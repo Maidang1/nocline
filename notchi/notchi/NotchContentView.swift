@@ -73,7 +73,14 @@ struct NotchContentView: View {
         .background {
             ZStack(alignment: .top) {
                 Color.black
-                GrassIslandView(sessions: sessionStore.sortedSessions)
+                GrassIslandView(
+                    sessions: sessionStore.sortedSessions,
+                    selectedSessionId: sessionStore.selectedSessionId,
+                    onSelectSession: { sessionId in
+                        sessionStore.selectSession(sessionId)
+                        showingSessionActivity = true
+                    }
+                )
                     .drawingGroup()
                     .frame(height: grassHeight, alignment: .bottom)
                     .opacity(isExpanded && !showingPanelSettings ? 1 : 0)
