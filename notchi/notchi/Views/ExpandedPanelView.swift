@@ -242,11 +242,17 @@ struct ExpandedPanelView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 8) {
-            Text("Waiting for activity")
+        let hooksInstalled = HookInstaller.isInstalled()
+        let title = hooksInstalled ? "Waiting for activity" : "Hooks not installed"
+        let subtitle = hooksInstalled
+            ? "Send a message in Claude Code to start tracking"
+            : "Open settings to set up Claude Code integration"
+
+        return VStack(spacing: 8) {
+            Text(title)
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(TerminalColors.secondaryText)
-            Text("Send a message in Claude Code to start tracking")
+            Text(subtitle)
                 .font(.system(size: 12))
                 .foregroundColor(TerminalColors.dimmedText)
         }
