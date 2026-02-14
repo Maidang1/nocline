@@ -32,11 +32,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NotchPanelManager.shared.updateGeometry(for: screen)
 
         let panel = NotchPanel(frame: windowFrame(for: screen))
-        NotchPanelManager.shared.panel = panel
 
         let contentView = NotchContentView()
         let hostingView = NSHostingView(rootView: contentView)
-        panel.contentView = hostingView
+
+        let hitTestView = NotchHitTestView()
+        hitTestView.panelManager = NotchPanelManager.shared
+        hitTestView.addSubview(hostingView)
+        hostingView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            hostingView.topAnchor.constraint(equalTo: hitTestView.topAnchor),
+            hostingView.bottomAnchor.constraint(equalTo: hitTestView.bottomAnchor),
+            hostingView.leadingAnchor.constraint(equalTo: hitTestView.leadingAnchor),
+            hostingView.trailingAnchor.constraint(equalTo: hitTestView.trailingAnchor),
+        ])
+
+        panel.contentView = hitTestView
         panel.orderFrontRegardless()
 
         self.notchPanel = panel

@@ -26,9 +26,8 @@ final class NotchPanel: NSPanel {
         hasShadow = false
         isMovable = false
 
-        // CRITICAL: Start with ignoring mouse events
-        // Global event monitors detect clicks on notch area
-        ignoresMouseEvents = true
+        // Hit testing is handled by NotchHitTestView (the content view wrapper)
+        // which selectively passes through events based on notch/panel rect
     }
 
     override var canBecomeKey: Bool { true }

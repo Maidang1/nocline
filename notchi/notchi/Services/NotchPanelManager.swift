@@ -8,14 +8,11 @@ final class NotchPanelManager {
     private(set) var isExpanded = false
     private(set) var isPinned = false
     private(set) var notchSize: CGSize = .zero
-    weak var panel: NSPanel?
-
-    private var notchRect: CGRect = .zero
-    private var panelRect: CGRect = .zero
+    private(set) var notchRect: CGRect = .zero
+    private(set) var panelRect: CGRect = .zero
     private var screenHeight: CGFloat = 0
 
     private var mouseDownMonitor: EventMonitor?
-    private var mouseMoveMonitor: EventMonitor?
 
     private init() {
         setupEventMonitors()
@@ -57,13 +54,6 @@ final class NotchPanelManager {
             }
         }
         mouseDownMonitor?.start()
-
-        mouseMoveMonitor = EventMonitor(mask: .mouseMoved) { [weak self] _ in
-            Task { @MainActor in
-                self?.handleMouseMove()
-            }
-        }
-        mouseMoveMonitor?.start()
     }
 
     private func handleMouseDown() {
@@ -85,14 +75,12 @@ final class NotchPanelManager {
     func expand() {
         guard !isExpanded else { return }
         isExpanded = true
-        panel?.ignoresMouseEvents = isPinned
     }
 
     func collapse() {
         guard isExpanded else { return }
         isExpanded = false
         isPinned = false
-        panel?.ignoresMouseEvents = true
     }
 
     func toggle() {
@@ -105,15 +93,5 @@ final class NotchPanelManager {
 
     func togglePin() {
         isPinned.toggle()
-        panel?.ignoresMouseEvents = isPinned
-    }
-
-    private func handleMouseMove() {
-        guard isExpanded && isPinned else { return }
-
-        let location = NSEvent.mouseLocation
-        let mouseInPanel = panelRect.contains(location)
-
-        panel?.ignoresMouseEvents = !mouseInPanel
     }
 }

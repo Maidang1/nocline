@@ -73,7 +73,14 @@ struct NotchContentView: View {
         .background {
             ZStack(alignment: .top) {
                 Color.black
-                GrassIslandView(
+                GrassIslandView(sessions: sessionStore.sortedSessions)
+                    .frame(height: grassHeight, alignment: .bottom)
+                    .opacity(isExpanded && !showingPanelSettings ? 1 : 0)
+            }
+        }
+        .overlay(alignment: .top) {
+            if isExpanded && !showingPanelSettings {
+                GrassTapOverlay(
                     sessions: sessionStore.sortedSessions,
                     selectedSessionId: sessionStore.selectedSessionId,
                     onSelectSession: { sessionId in
@@ -82,9 +89,7 @@ struct NotchContentView: View {
                         showingSessionActivity = true
                     }
                 )
-                    .drawingGroup()
-                    .frame(height: grassHeight, alignment: .bottom)
-                    .opacity(isExpanded && !showingPanelSettings ? 1 : 0)
+                .frame(height: grassHeight, alignment: .bottom)
             }
         }
         .overlay(alignment: .topTrailing) {

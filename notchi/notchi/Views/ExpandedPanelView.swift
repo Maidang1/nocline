@@ -80,9 +80,11 @@ struct ExpandedPanelView: View {
         VStack(alignment: .leading, spacing: 0) {
             if isActivityCollapsed {
                 Spacer()
+                    .allowsHitTesting(false)
             } else {
                 Spacer()
                     .frame(height: geometry.size.height * 0.3)
+                    .allowsHitTesting(false)
             }
 
             VStack(alignment: .leading, spacing: 0) {
@@ -122,9 +124,11 @@ struct ExpandedPanelView: View {
         VStack(alignment: .leading, spacing: 0) {
             if isActivityCollapsed {
                 Spacer()
+                    .allowsHitTesting(false)
             } else {
                 Spacer()
                     .frame(height: geometry.size.height * 0.3)
+                    .allowsHitTesting(false)
             }
 
             VStack(alignment: .leading, spacing: 0) {
