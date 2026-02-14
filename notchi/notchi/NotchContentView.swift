@@ -22,6 +22,7 @@ struct NotchContentView: View {
     @State private var showingSessionActivity = false
     @State private var isMuted = AppSettings.isMuted
     @State private var isActivityCollapsed = false
+    @State private var hoveredSessionId: String?
 
     private var sessionStore: SessionStore {
         stateMachine.sessionStore
@@ -73,7 +74,7 @@ struct NotchContentView: View {
         .background {
             ZStack(alignment: .top) {
                 Color.black
-                GrassIslandView(sessions: sessionStore.sortedSessions)
+                GrassIslandView(sessions: sessionStore.sortedSessions, selectedSessionId: sessionStore.selectedSessionId, hoveredSessionId: hoveredSessionId)
                     .frame(height: grassHeight, alignment: .bottom)
                     .opacity(isExpanded && !showingPanelSettings ? 1 : 0)
             }
@@ -83,6 +84,7 @@ struct NotchContentView: View {
                 GrassTapOverlay(
                     sessions: sessionStore.sortedSessions,
                     selectedSessionId: sessionStore.selectedSessionId,
+                    hoveredSessionId: $hoveredSessionId,
                     onSelectSession: { sessionId in
                         guard sessionStore.activeSessionCount >= 2 else { return }
                         sessionStore.selectSession(sessionId)
@@ -126,6 +128,7 @@ struct NotchContentView: View {
             if !expanded {
                 showingPanelSettings = false
                 showingSessionActivity = false
+                hoveredSessionId = nil
             }
         }
         .onChange(of: sessionStore.activeSessionCount) { _, count in

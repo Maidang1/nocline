@@ -20,6 +20,8 @@ private enum SpriteLayout {
 
 struct GrassIslandView: View {
     let sessions: [SessionData]
+    var selectedSessionId: String?
+    var hoveredSessionId: String?
 
     private let patchWidth: CGFloat = 80
 
@@ -39,14 +41,15 @@ struct GrassIslandView: View {
                 .drawingGroup()
 
                 if sessions.isEmpty {
-                    GrassSpriteView(state: .idle, xPosition: 0.5, yOffset: -15, totalWidth: geometry.size.width)
+                    GrassSpriteView(state: .idle, xPosition: 0.5, yOffset: -15, totalWidth: geometry.size.width, glowOpacity: 0)
                 } else {
                     ForEach(SpriteLayout.depthSorted(sessions)) { session in
                         GrassSpriteView(
                             state: session.state,
                             xPosition: session.spriteXPosition,
                             yOffset: session.spriteYOffset,
-                            totalWidth: geometry.size.width
+                            totalWidth: geometry.size.width,
+                            glowOpacity: glowOpacity(for: session.id)
                         )
                     }
                 }
@@ -55,6 +58,12 @@ struct GrassIslandView: View {
         }
         .clipped()
         .allowsHitTesting(false)
+    }
+
+    private func glowOpacity(for sessionId: String) -> Double {
+        if sessionId == selectedSessionId { return 0.7 }
+        if sessionId == hoveredSessionId { return 0.3 }
+        return 0
     }
 
     private func patchCount(for width: CGFloat) -> Int {
@@ -67,6 +76,7 @@ struct GrassIslandView: View {
 struct GrassTapOverlay: View {
     let sessions: [SessionData]
     var selectedSessionId: String?
+    @Binding var hoveredSessionId: String?
     var onSelectSession: ((String) -> Void)?
 
     var body: some View {
@@ -77,10 +87,11 @@ struct GrassTapOverlay: View {
                 if !sessions.isEmpty {
                     ForEach(SpriteLayout.depthSorted(sessions)) { session in
                         SpriteTapTarget(
-                            isSelected: session.id == selectedSessionId,
+                            sessionId: session.id,
                             xPosition: session.spriteXPosition,
                             yOffset: session.spriteYOffset,
                             totalWidth: geometry.size.width,
+                            hoveredSessionId: $hoveredSessionId,
                             onTap: { onSelectSession?(session.id) }
                         )
                     }
@@ -100,40 +111,25 @@ private struct NoHighlightButtonStyle: ButtonStyle {
 }
 
 private struct SpriteTapTarget: View {
-    let isSelected: Bool
+    let sessionId: String
     let xPosition: CGFloat
     let yOffset: CGFloat
     let totalWidth: CGFloat
+    @Binding var hoveredSessionId: String?
     var onTap: (() -> Void)?
 
-    @State private var isHovered = false
     @State private var tapScale: CGFloat = 1.0
-
-    private let glowColor = Color(red: 0.4, green: 0.7, blue: 1.0)
-
-    private var glowOpacity: Double {
-        if isSelected { return 0.7 }
-        if isHovered { return 0.3 }
-        return 0
-    }
 
     var body: some View {
         Button(action: handleTap) {
             Color.clear
                 .frame(width: SpriteLayout.size, height: SpriteLayout.size)
                 .contentShape(Rectangle())
-                .background(alignment: .bottom) {
-                    if glowOpacity > 0 {
-                        Ellipse()
-                            .fill(glowColor.opacity(glowOpacity))
-                            .frame(width: SpriteLayout.size * 0.85, height: SpriteLayout.size * 0.25)
-                            .blur(radius: 8)
-                            .offset(y: 4)
-                    }
-                }
         }
         .buttonStyle(NoHighlightButtonStyle())
-        .onHover { isHovered = $0 }
+        .onHover { hovering in
+            hoveredSessionId = hovering ? sessionId : nil
+        }
         .scaleEffect(tapScale)
         .offset(x: SpriteLayout.xOffset(xPosition: xPosition, totalWidth: totalWidth), y: yOffset)
     }
@@ -153,12 +149,14 @@ private struct GrassSpriteView: View {
     let xPosition: CGFloat
     let yOffset: CGFloat
     let totalWidth: CGFloat
+    var glowOpacity: Double = 0
 
     @State private var isSwayingRight = true
     @State private var isBobUp = true
 
     private let swayDuration: Double = 2.0
     private let bobAmplitude: CGFloat = 2
+    private let glowColor = Color(red: 0.4, green: 0.7, blue: 1.0)
 
     var body: some View {
         SpriteSheetView(
@@ -169,6 +167,15 @@ private struct GrassSpriteView: View {
             isAnimating: true
         )
         .frame(width: SpriteLayout.size, height: SpriteLayout.size)
+        .background(alignment: .bottom) {
+            if glowOpacity > 0 {
+                Ellipse()
+                    .fill(glowColor.opacity(glowOpacity))
+                    .frame(width: SpriteLayout.size * 0.85, height: SpriteLayout.size * 0.25)
+                    .blur(radius: 8)
+                    .offset(y: 4)
+            }
+        }
         .rotationEffect(.degrees(isSwayingRight ? state.swayAmplitude : -state.swayAmplitude), anchor: .bottom)
         .offset(x: SpriteLayout.xOffset(xPosition: xPosition, totalWidth: totalWidth), y: yOffset + (isBobUp ? -bobAmplitude : bobAmplitude))
         .onAppear {

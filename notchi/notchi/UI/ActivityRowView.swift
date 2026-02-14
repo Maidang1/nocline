@@ -196,15 +196,16 @@ struct WorkingIndicatorView: View {
     }
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 3) {
             Text(symbols[symbolPhase])
                 .font(.system(size: 14, weight: .bold))
                 .foregroundColor(TerminalColors.claudeOrange)
                 .frame(width: 14, alignment: .center)
             Text("\(statusText)\(dots)")
-                .font(.system(size: 13, weight: .medium).italic())
+                .font(.system(size: 12, weight: .medium).italic())
                 .foregroundColor(TerminalColors.claudeOrange)
         }
+        .padding(.leading, -1)
         .onReceive(dotsTimer) { _ in
             dotCount = (dotCount % 3) + 1
         }
