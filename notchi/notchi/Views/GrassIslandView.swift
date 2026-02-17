@@ -155,7 +155,7 @@ private struct GrassSpriteView: View {
     @State private var isBobUp = true
 
     private let swayDuration: Double = 2.0
-    private let bobAmplitude: CGFloat = 2
+    private var bobAmplitude: CGFloat { state.bobAmplitude == 0 ? 0 : 2 }
     private let glowColor = Color(red: 0.4, green: 0.7, blue: 1.0)
 
     var body: some View {

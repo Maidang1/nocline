@@ -6,6 +6,7 @@ enum NotchiTask: String, CaseIterable {
     var animationFPS: Double {
         switch self {
         case .compacting: return 6.0
+        case .sleeping: return 2.0
         default: return 4.0
         }
     }
