@@ -3,16 +3,23 @@ import SwiftUI
 struct SessionSpriteView: View {
     let state: NotchiState
     let isSelected: Bool
-    let onTap: () -> Void
-
-    @State private var isBobUp = false
 
     private var bobAmplitude: CGFloat {
-        isSelected ? state.bobAmplitude : state.bobAmplitude * 0.67
+        guard state.bobAmplitude > 0 else { return 0 }
+        return isSelected ? state.bobAmplitude : state.bobAmplitude * 0.67
+    }
+
+    private func bobOffset(at date: Date) -> CGFloat {
+        guard bobAmplitude > 0 else { return 0 }
+        let t = date.timeIntervalSinceReferenceDate
+        let phase = (t / state.bobDuration).truncatingRemainder(dividingBy: 1.0)
+        // Ease-in-out sine wave: smooth up and down
+        let wave = sin(phase * .pi * 2)
+        return wave * bobAmplitude
     }
 
     var body: some View {
-        Button(action: onTap) {
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: bobAmplitude == 0)) { timeline in
             SpriteSheetView(
                 spriteSheet: state.spriteSheetName,
                 frameCount: state.frameCount,
@@ -21,25 +28,7 @@ struct SessionSpriteView: View {
                 isAnimating: true
             )
             .frame(width: 30, height: 30)
-            .opacity(isSelected ? 1.0 : 0.5)
-            .offset(y: isBobUp ? -bobAmplitude : bobAmplitude)
-        }
-        .buttonStyle(.plain)
-        .onAppear {
-            startBobAnimation()
-        }
-        .onChange(of: state) {
-            startBobAnimation()
-        }
-    }
-
-    private func startBobAnimation() {
-        if bobAmplitude == 0 {
-            withAnimation(.easeInOut(duration: 0.3)) { isBobUp = false }
-            return
-        }
-        withAnimation(.easeInOut(duration: state.bobDuration).repeatForever(autoreverses: true)) {
-            isBobUp.toggle()
+            .offset(y: bobOffset(at: timeline.date))
         }
     }
 }

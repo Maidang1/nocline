@@ -151,55 +151,56 @@ private struct GrassSpriteView: View {
     let totalWidth: CGFloat
     var glowOpacity: Double = 0
 
-    @State private var isSwayingRight = true
-    @State private var isBobUp = true
-
     private let swayDuration: Double = 2.0
     private var bobAmplitude: CGFloat { state.bobAmplitude == 0 ? 0 : 2 }
     private let glowColor = Color(red: 0.4, green: 0.7, blue: 1.0)
 
+    private var swayAmplitude: Double {
+        state.task == .sleeping ? 0 : state.swayAmplitude
+    }
+
+    private var isAnimatingMotion: Bool {
+        bobAmplitude > 0 || swayAmplitude > 0
+    }
+
+    private func bobOffset(at date: Date) -> CGFloat {
+        guard bobAmplitude > 0 else { return 0 }
+        let t = date.timeIntervalSinceReferenceDate
+        let phase = (t / state.bobDuration).truncatingRemainder(dividingBy: 1.0)
+        return sin(phase * .pi * 2) * bobAmplitude
+    }
+
+    private func swayDegrees(at date: Date) -> Double {
+        guard swayAmplitude > 0 else { return 0 }
+        let t = date.timeIntervalSinceReferenceDate
+        let phase = (t / swayDuration).truncatingRemainder(dividingBy: 1.0)
+        return sin(phase * .pi * 2) * swayAmplitude
+    }
+
     var body: some View {
-        SpriteSheetView(
-            spriteSheet: state.spriteSheetName,
-            frameCount: state.frameCount,
-            columns: state.columns,
-            fps: state.animationFPS,
-            isAnimating: true
-        )
-        .frame(width: SpriteLayout.size, height: SpriteLayout.size)
-        .background(alignment: .bottom) {
-            if glowOpacity > 0 {
-                Ellipse()
-                    .fill(glowColor.opacity(glowOpacity))
-                    .frame(width: SpriteLayout.size * 0.85, height: SpriteLayout.size * 0.25)
-                    .blur(radius: 8)
-                    .offset(y: 4)
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !isAnimatingMotion)) { timeline in
+            SpriteSheetView(
+                spriteSheet: state.spriteSheetName,
+                frameCount: state.frameCount,
+                columns: state.columns,
+                fps: state.animationFPS,
+                isAnimating: true
+            )
+            .frame(width: SpriteLayout.size, height: SpriteLayout.size)
+            .background(alignment: .bottom) {
+                if glowOpacity > 0 {
+                    Ellipse()
+                        .fill(glowColor.opacity(glowOpacity))
+                        .frame(width: SpriteLayout.size * 0.85, height: SpriteLayout.size * 0.25)
+                        .blur(radius: 8)
+                        .offset(y: 4)
+                }
             }
-        }
-        .rotationEffect(.degrees(isSwayingRight ? state.swayAmplitude : -state.swayAmplitude), anchor: .bottom)
-        .offset(x: SpriteLayout.xOffset(xPosition: xPosition, totalWidth: totalWidth), y: yOffset + (isBobUp ? -bobAmplitude : bobAmplitude))
-        .onAppear {
-            startSwayAnimation()
-            startBobAnimation()
-        }
-        .onChange(of: state) {
-            startBobAnimation()
-        }
-    }
-
-    private func startSwayAnimation() {
-        withAnimation(.easeInOut(duration: swayDuration).repeatForever(autoreverses: true)) {
-            isSwayingRight.toggle()
-        }
-    }
-
-    private func startBobAnimation() {
-        if bobAmplitude == 0 {
-            withAnimation(.easeInOut(duration: 0.3)) { isBobUp = false }
-            return
-        }
-        withAnimation(.easeInOut(duration: state.bobDuration).repeatForever(autoreverses: true)) {
-            isBobUp.toggle()
+            .rotationEffect(.degrees(swayDegrees(at: timeline.date)), anchor: .bottom)
+            .offset(
+                x: SpriteLayout.xOffset(xPosition: xPosition, totalWidth: totalWidth),
+                y: yOffset + bobOffset(at: timeline.date)
+            )
         }
     }
 }
