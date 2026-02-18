@@ -67,52 +67,52 @@ final class SessionStore {
             session.clearAssistantMessages()
             session.clearPendingQuestions()
             if Self.isLocalSlashCommand(event.userPrompt) {
-                session.updateState(.idle)
+                session.updateTask(.idle)
             } else {
-                session.updateState(.working)
+                session.updateTask(.working)
             }
 
         case "PreCompact":
-            session.updateState(.compacting)
+            session.updateTask(.compacting)
 
         case "SessionStart":
             if isProcessing {
-                session.updateState(.working)
+                session.updateTask(.working)
             }
 
         case "PreToolUse":
             let toolInput = event.toolInput?.mapValues { $0.value }
             session.recordPreToolUse(tool: event.tool, toolInput: toolInput, toolUseId: event.toolUseId)
             if event.tool == "AskUserQuestion" {
-                session.updateState(.waiting)
+                session.updateTask(.waiting)
                 session.setPendingQuestions(Self.parseQuestions(from: event.toolInput))
             } else {
                 session.clearPendingQuestions()
-                session.updateState(.working)
+                session.updateTask(.working)
             }
 
         case "PermissionRequest":
             let question = Self.buildPermissionQuestion(tool: event.tool, toolInput: event.toolInput)
-            session.updateState(.waiting)
+            session.updateTask(.waiting)
             session.setPendingQuestions([question])
 
         case "PostToolUse":
             let success = event.status != "error"
             session.recordPostToolUse(tool: event.tool, toolUseId: event.toolUseId, success: success)
             session.clearPendingQuestions()
-            session.updateState(.working)
+            session.updateTask(.working)
 
         case "Stop", "SubagentStop":
             session.clearPendingQuestions()
-            session.updateState(.idle)
+            session.updateTask(.idle)
 
         case "SessionEnd":
             session.endSession()
             removeSession(event.sessionId)
 
         default:
-            if !isProcessing && session.state != .idle {
-                session.updateState(.idle)
+            if !isProcessing && session.task != .idle {
+                session.updateTask(.idle)
             }
         }
 

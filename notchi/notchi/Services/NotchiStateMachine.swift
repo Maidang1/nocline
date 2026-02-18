@@ -31,7 +31,6 @@ final class NotchiStateMachine {
 
     func handleEvent(_ event: HookEvent) {
         cancelSleepTimer()
-        restartEmotionDecayTimer()
 
         let session = sessionStore.process(event)
         let isDone = event.status == "waiting_for_input"
@@ -79,7 +78,7 @@ final class NotchiStateMachine {
             }
 
         default:
-            if isDone && session.state != .idle {
+            if isDone && session.task != .idle {
                 SoundService.shared.playNotificationSound()
             }
         }
@@ -93,7 +92,7 @@ final class NotchiStateMachine {
             guard !Task.isCancelled else { return }
 
             for session in sessionStore.sessions.values {
-                session.updateState(.sleeping)
+                session.updateTask(.sleeping)
             }
         }
     }
@@ -126,13 +125,13 @@ final class NotchiStateMachine {
                 return
             }
 
-            if result.interrupted && session.state.task == .working {
-                session.updateState(.idle)
+            if result.interrupted && session.task == .working {
+                session.updateTask(.idle)
                 session.updateProcessingState(isProcessing: false)
-            } else if session.state.task == .waiting,
+            } else if session.task == .waiting,
                       Date().timeIntervalSince(session.lastActivity) > Self.waitingClearGuard {
                 session.clearPendingQuestions()
-                session.updateState(.working)
+                session.updateTask(.working)
             }
 
             pendingSyncTasks.removeValue(forKey: sessionId)
@@ -185,8 +184,4 @@ final class NotchiStateMachine {
         }
     }
 
-    private func restartEmotionDecayTimer() {
-        emotionDecayTimer?.cancel()
-        startEmotionDecayTimer()
-    }
 }

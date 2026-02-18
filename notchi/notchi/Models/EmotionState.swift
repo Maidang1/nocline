@@ -11,13 +11,14 @@ final class EmotionState {
     private(set) var currentEmotion: NotchiEmotion = .neutral
     private(set) var scores: [NotchiEmotion: Double] = [
         .happy: 0.0,
-        .sad: 0.0,
-        .neutral: 0.0
+        .sad: 0.0
     ]
 
-    static let emotionChangeThreshold = 0.5
+    static let emotionChangeThreshold = 0.6
+    static let intensityDampen = 0.5
     static let decayRate = 0.8
     static let interEmotionDecay = 0.9
+    static let neutralCounterDecay = 0.7
     static let decayInterval: Duration = .seconds(30)
 
     private var scoresDescription: String {
@@ -29,17 +30,20 @@ final class EmotionState {
 
     private init() {}
 
-    /// Maps an analyzer emotion string to a visual emotion. Unknown values (e.g. "confused") fall back to .neutral.
-    private static func mapEmotion(_ raw: String) -> NotchiEmotion {
-        NotchiEmotion(rawValue: raw) ?? .neutral
-    }
-
     func recordEmotion(_ rawEmotion: String, intensity: Double, prompt: String) {
-        let emotion = Self.mapEmotion(rawEmotion)
-        scores[emotion, default: 0.0] = min(scores[emotion, default: 0.0] + intensity, 1.0)
+        let emotion = NotchiEmotion(rawValue: rawEmotion)
 
-        for key in scores.keys where key != emotion {
-            scores[key, default: 0.0] *= Self.interEmotionDecay
+        if let emotion, emotion != .neutral {
+            let dampened = intensity * Self.intensityDampen
+            scores[emotion, default: 0.0] = min(scores[emotion, default: 0.0] + dampened, 1.0)
+            for key in scores.keys where key != emotion {
+                scores[key, default: 0.0] *= Self.interEmotionDecay
+            }
+        } else {
+            // Neutral or unknown: actively counter all non-neutral scores
+            for key in scores.keys {
+                scores[key, default: 0.0] *= Self.neutralCounterDecay
+            }
         }
 
         updateCurrentEmotion()
@@ -64,9 +68,7 @@ final class EmotionState {
     }
 
     private func updateCurrentEmotion() {
-        let best = scores
-            .filter { $0.key != .neutral }
-            .max(by: { $0.value < $1.value })
+        let best = scores.max(by: { $0.value < $1.value })
 
         if let best, best.value >= Self.emotionChangeThreshold {
             currentEmotion = best.key

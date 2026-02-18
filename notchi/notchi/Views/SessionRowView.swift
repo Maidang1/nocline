@@ -62,7 +62,7 @@ struct SessionRowView: View {
     }
 
     private var stateColor: Color {
-        switch session.state.task {
+        switch session.task {
         case .idle, .sleeping, .waiting:
             return TerminalColors.dimmedText
         case .working, .compacting:

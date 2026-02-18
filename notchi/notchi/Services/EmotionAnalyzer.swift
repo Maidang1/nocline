@@ -22,15 +22,15 @@ final class EmotionAnalyzer {
 
     private static let apiURL = URL(string: "https://api.anthropic.com/v1/messages")!
     private static let model = "claude-haiku-4-5-20251001"
-    private static let validEmotions: Set<String> = ["happy", "sad", "confused", "neutral"]
+    private static let validEmotions: Set<String> = ["happy", "sad", "neutral"]
 
     private static let systemPrompt = """
         Classify the emotional tone of the user's message into exactly one emotion and an intensity score.
-        Emotions: happy, sad, confused, neutral.
-        Happy: praise, gratitude, excitement, satisfaction, positive profanity (e.g. "LETS FUCKING GO").
-        Sad: frustration, anger, complaints, feeling stuck, disappointment, negative profanity.
-        Confused: uncertainty, asking for help, not understanding something.
-        Neutral: instructions, normal tasks, factual statements.
+        Emotions: happy, sad, neutral.
+        Happy: explicit praise ("great job", "thank you!"), gratitude, celebration, positive profanity ("LETS FUCKING GO").
+        Sad: frustration, anger, insults, complaints, feeling stuck, disappointment, negative profanity.
+        Neutral: instructions, requests, task descriptions, questions, enthusiasm about work, factual statements. Exclamation marks or urgency about a task do NOT make it happy — only genuine positive sentiment toward the AI or outcome does.
+        Default to neutral when unsure. Most coding instructions are neutral regardless of tone.
         Intensity: 0.0 (barely noticeable) to 1.0 (very strong).
         Reply with ONLY valid JSON: {"emotion": "...", "intensity": ...}
         """

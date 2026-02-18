@@ -19,7 +19,10 @@ final class SessionData: Identifiable {
     let spriteXPosition: CGFloat
     let spriteYOffset: CGFloat
 
-    private(set) var state: NotchiState = .idle
+    private(set) var task: NotchiTask = .idle
+    var state: NotchiState {
+        NotchiState(task: task, emotion: EmotionState.shared.currentEmotion)
+    }
     private(set) var isProcessing: Bool = false
     private(set) var lastActivity: Date
     private(set) var recentEvents: [SessionEvent] = []
@@ -108,8 +111,8 @@ final class SessionData: Identifiable {
         return yOffsetBase - CGFloat(yBits % yOffsetRange)
     }
 
-    func updateState(_ newState: NotchiState) {
-        state = newState
+    func updateTask(_ newTask: NotchiTask) {
+        task = newTask
         lastActivity = Date()
     }
 
