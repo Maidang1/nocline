@@ -66,7 +66,11 @@ final class SessionStore {
             }
             session.clearAssistantMessages()
             session.clearPendingQuestions()
-            session.updateState(.working)
+            if Self.isLocalSlashCommand(event.userPrompt) {
+                session.updateState(.idle)
+            } else {
+                session.updateState(.working)
+            }
 
         case "PreCompact":
             session.updateState(.compacting)
@@ -171,6 +175,17 @@ final class SessionStore {
             }
             return PendingQuestion(question: questionText, header: header, options: options)
         }
+    }
+
+    private static let localSlashCommands: Set<String> = [
+        "/clear", "/help", "/cost", "/status",
+        "/vim", "/fast", "/model", "/login", "/logout",
+    ]
+
+    private static func isLocalSlashCommand(_ prompt: String?) -> Bool {
+        guard let prompt, prompt.hasPrefix("/") else { return false }
+        let command = String(prompt.prefix(while: { !$0.isWhitespace }))
+        return localSlashCommands.contains(command)
     }
 
     private static func buildPermissionQuestion(tool: String?, toolInput: [String: AnyCodable]?) -> PendingQuestion {
