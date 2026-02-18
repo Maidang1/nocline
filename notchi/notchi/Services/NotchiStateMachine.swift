@@ -18,6 +18,7 @@ final class NotchiStateMachine {
 
     private static let sleepDelay: Duration = .seconds(300)
     private static let syncDebounce: Duration = .milliseconds(100)
+    private static let waitingClearGuard: TimeInterval = 2.0
 
     var currentState: NotchiState {
         sessionStore.effectiveSession?.state ?? .idle
@@ -122,6 +123,13 @@ final class NotchiStateMachine {
 
             if !messages.isEmpty {
                 sessionStore.recordAssistantMessages(messages, for: sessionId)
+            }
+
+            if let session = sessionStore.sessions[sessionId],
+               session.state.task == .waiting,
+               Date().timeIntervalSince(session.lastActivity) > Self.waitingClearGuard {
+                session.clearPendingQuestions()
+                session.updateState(.working)
             }
 
             pendingSyncTasks.removeValue(forKey: sessionId)

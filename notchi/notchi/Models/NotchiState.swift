@@ -13,7 +13,7 @@ enum NotchiTask: String, CaseIterable {
 
     var spritePrefix: String {
         switch self {
-        case .waiting: return "idle"
+        case .waiting: return "compacting"
         default: return rawValue
         }
     }
@@ -66,14 +66,14 @@ enum NotchiTask: String, CaseIterable {
 
     var frameCount: Int {
         switch self {
-        case .compacting: return 5
+        case .compacting, .waiting: return 5
         default: return 6
         }
     }
 
     var columns: Int {
         switch self {
-        case .compacting: return 5
+        case .compacting, .waiting: return 5
         default: return 6
         }
     }

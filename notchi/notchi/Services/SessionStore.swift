@@ -65,6 +65,7 @@ final class SessionStore {
                 session.recordUserPrompt(prompt)
             }
             session.clearAssistantMessages()
+            session.clearPendingQuestions()
             session.updateState(.working)
 
         case "PreCompact":
@@ -80,18 +81,23 @@ final class SessionStore {
                 session.updateState(.waiting)
                 session.setPendingQuestions(Self.parseQuestions(from: event.toolInput))
             } else {
+                session.clearPendingQuestions()
                 session.updateState(.working)
             }
 
         case "PermissionRequest":
+            let question = Self.buildPermissionQuestion(tool: event.tool, toolInput: event.toolInput)
             session.updateState(.waiting)
+            session.setPendingQuestions([question])
 
         case "PostToolUse":
             let success = event.status != "error"
             session.recordPostToolUse(tool: event.tool, toolUseId: event.toolUseId, success: success)
             session.clearPendingQuestions()
+            session.updateState(.working)
 
         case "Stop", "SubagentStop":
+            session.clearPendingQuestions()
             session.updateState(.idle)
 
         case "SessionEnd":
@@ -165,5 +171,21 @@ final class SessionStore {
             }
             return PendingQuestion(question: questionText, header: header, options: options)
         }
+    }
+
+    private static func buildPermissionQuestion(tool: String?, toolInput: [String: AnyCodable]?) -> PendingQuestion {
+        let toolName = tool ?? "Tool"
+        let input = toolInput?.mapValues { $0.value }
+        let description = SessionEvent.deriveDescription(tool: tool, toolInput: input)
+        return PendingQuestion(
+            question: description ?? "\(toolName) wants to proceed",
+            header: "Permission Request",
+            // Claude Code permission prompts always present these three choices
+            options: [
+                (label: "Yes", description: nil),
+                (label: "Yes, and don't ask again", description: nil),
+                (label: "No", description: nil),
+            ]
+        )
     }
 }
