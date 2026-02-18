@@ -31,6 +31,11 @@ struct QuotaPeriod: Decodable {
         return formatter.date(from: resetsAt) ?? ISO8601DateFormatter().date(from: resetsAt)
     }
 
+    var isExpired: Bool {
+        guard let resetDate else { return true }
+        return resetDate <= Date()
+    }
+
     var formattedResetTime: String? {
         guard let resetDate else { return nil }
         let now = Date()

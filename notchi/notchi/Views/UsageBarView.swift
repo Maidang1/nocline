@@ -12,10 +12,15 @@ struct UsageBarView: View {
         error != nil && usage != nil
     }
 
+    private var effectivePercentage: Int {
+        guard let usage, !usage.isExpired else { return 0 }
+        return usage.usagePercentage
+    }
+
     private var usageColor: Color {
-        guard let usage else { return TerminalColors.dimmedText }
+        guard usage != nil else { return TerminalColors.dimmedText }
         if isStale { return TerminalColors.dimmedText }
-        switch usage.usagePercentage {
+        switch effectivePercentage {
         case ..<50: return TerminalColors.green
         case ..<80: return TerminalColors.amber
         default: return TerminalColors.red
@@ -76,8 +81,8 @@ struct UsageBarView: View {
                 if isLoading {
                     ProgressView()
                         .controlSize(.mini)
-                } else if let usage {
-                    Text("\(usage.usagePercentage)%")
+                } else if usage != nil {
+                    Text("\(effectivePercentage)%")
                         .font(.system(size: 11, weight: .semibold, design: .monospaced))
                         .foregroundColor(usageColor)
                 }
@@ -94,10 +99,10 @@ struct UsageBarView: View {
                 RoundedRectangle(cornerRadius: 2)
                     .fill(TerminalColors.subtleBackground)
 
-                if let usage {
+                if usage != nil {
                     RoundedRectangle(cornerRadius: 2)
                         .fill(usageColor)
-                        .frame(width: geometry.size.width * Double(usage.usagePercentage) / 100)
+                        .frame(width: geometry.size.width * Double(effectivePercentage) / 100)
                 }
             }
         }
