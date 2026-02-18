@@ -194,7 +194,10 @@ private struct GrassSpriteView: View {
     }
 
     private func startBobAnimation() {
-        guard bobAmplitude > 0 else { return }
+        if bobAmplitude == 0 {
+            withAnimation(.easeInOut(duration: 0.3)) { isBobUp = false }
+            return
+        }
         withAnimation(.easeInOut(duration: state.bobDuration).repeatForever(autoreverses: true)) {
             isBobUp.toggle()
         }

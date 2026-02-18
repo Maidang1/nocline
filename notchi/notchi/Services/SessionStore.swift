@@ -10,7 +10,7 @@ final class SessionStore {
 
     private(set) var sessions: [String: SessionData] = [:]
     private(set) var selectedSessionId: String?
-    private var nextSessionNumber = 1
+    private var nextSessionNumberByProject: [String: Int] = [:]
 
     private init() {}
 
@@ -76,7 +76,9 @@ final class SessionStore {
             session.updateState(.compacting)
 
         case "SessionStart":
-            session.updateState(.working)
+            if isProcessing {
+                session.updateState(.working)
+            }
 
         case "PreToolUse":
             let toolInput = event.toolInput?.mapValues { $0.value }
@@ -127,8 +129,9 @@ final class SessionStore {
             return existing
         }
 
-        let sessionNumber = nextSessionNumber
-        nextSessionNumber += 1
+        let projectName = (cwd as NSString).lastPathComponent
+        let sessionNumber = nextSessionNumberByProject[projectName, default: 0] + 1
+        nextSessionNumberByProject[projectName] = sessionNumber
         let existingXPositions = sessions.values.map(\.spriteXPosition)
         let session = SessionData(sessionId: sessionId, cwd: cwd, sessionNumber: sessionNumber, existingXPositions: existingXPositions)
         sessions[sessionId] = session

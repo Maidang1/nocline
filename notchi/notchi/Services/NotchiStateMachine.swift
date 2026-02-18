@@ -75,7 +75,7 @@ final class NotchiStateMachine {
             pendingPositionMarks.removeValue(forKey: event.sessionId)?.cancel()
             Task { await ConversationParser.shared.resetState(for: event.sessionId) }
             if sessionStore.activeSessionCount == 0 {
-                transitionGlobal(to: .idle)
+                logger.info("Global state: idle")
             }
 
         default:
@@ -85,10 +85,6 @@ final class NotchiStateMachine {
         }
 
         startSleepTimer()
-    }
-
-    private func transitionGlobal(to newState: NotchiState) {
-        logger.info("Global state: \(newState.task.rawValue, privacy: .public)")
     }
 
     private func startSleepTimer() {
@@ -116,18 +112,25 @@ final class NotchiStateMachine {
             try? await Task.sleep(for: Self.syncDebounce)
             guard !Task.isCancelled else { return }
 
-            let messages = await ConversationParser.shared.parseIncremental(
+            let result = await ConversationParser.shared.parseIncremental(
                 sessionId: sessionId,
                 cwd: cwd
             )
 
-            if !messages.isEmpty {
-                sessionStore.recordAssistantMessages(messages, for: sessionId)
+            if !result.messages.isEmpty {
+                sessionStore.recordAssistantMessages(result.messages, for: sessionId)
             }
 
-            if let session = sessionStore.sessions[sessionId],
-               session.state.task == .waiting,
-               Date().timeIntervalSince(session.lastActivity) > Self.waitingClearGuard {
+            guard let session = sessionStore.sessions[sessionId] else {
+                pendingSyncTasks.removeValue(forKey: sessionId)
+                return
+            }
+
+            if result.interrupted && session.state.task == .working {
+                session.updateState(.idle)
+                session.updateProcessingState(isProcessing: false)
+            } else if session.state.task == .waiting,
+                      Date().timeIntervalSince(session.lastActivity) > Self.waitingClearGuard {
                 session.clearPendingQuestions()
                 session.updateState(.working)
             }
@@ -139,8 +142,7 @@ final class NotchiStateMachine {
     private func startFileWatcher(sessionId: String, cwd: String) {
         stopFileWatcher(sessionId: sessionId)
 
-        let projectDir = cwd.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ".", with: "-")
-        let sessionFile = "\(NSHomeDirectory())/.claude/projects/\(projectDir)/\(sessionId).jsonl"
+        let sessionFile = ConversationParser.sessionFilePath(sessionId: sessionId, cwd: cwd)
 
         let fd = open(sessionFile, O_EVTONLY)
         guard fd >= 0 else {

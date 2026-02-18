@@ -174,7 +174,7 @@ struct ExpandedPanelView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack {
                         if let session = effectiveSession {
-                            Text("Notchi #\(session.sessionNumber)")
+                            Text("\(session.projectName) #\(session.sessionNumber)")
                                 .font(.system(size: 11, weight: .medium))
                                 .foregroundColor(TerminalColors.secondaryText)
                         }

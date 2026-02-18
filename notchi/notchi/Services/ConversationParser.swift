@@ -7,9 +7,11 @@
 //
 
 import Foundation
-import os.log
 
-private let logger = Logger(subsystem: "com.ruban.notchi", category: "ConversationParser")
+struct ParseResult {
+    let messages: [AssistantMessage]
+    let interrupted: Bool
+}
 
 actor ConversationParser {
     static let shared = ConversationParser()
@@ -17,16 +19,18 @@ actor ConversationParser {
     private var lastFileOffset: [String: UInt64] = [:]
     private var seenMessageIds: [String: Set<String>] = [:]
 
+    private static let emptyResult = ParseResult(messages: [], interrupted: false)
+
     /// Parse only NEW assistant text messages since last call
-    func parseIncremental(sessionId: String, cwd: String) -> [AssistantMessage] {
+    func parseIncremental(sessionId: String, cwd: String) -> ParseResult {
         let sessionFile = Self.sessionFilePath(sessionId: sessionId, cwd: cwd)
 
         guard FileManager.default.fileExists(atPath: sessionFile) else {
-            return []
+            return Self.emptyResult
         }
 
         guard let fileHandle = FileHandle(forReadingAtPath: sessionFile) else {
-            return []
+            return Self.emptyResult
         }
         defer { try? fileHandle.close() }
 
@@ -34,7 +38,7 @@ actor ConversationParser {
         do {
             fileSize = try fileHandle.seekToEnd()
         } catch {
-            return []
+            return Self.emptyResult
         }
 
         var currentOffset = lastFileOffset[sessionId] ?? 0
@@ -47,26 +51,31 @@ actor ConversationParser {
 
         // No new content
         if fileSize == currentOffset {
-            return []
+            return Self.emptyResult
         }
 
         do {
             try fileHandle.seek(toOffset: currentOffset)
         } catch {
-            return []
+            return Self.emptyResult
         }
 
         guard let newData = try? fileHandle.readToEnd(),
               let newContent = String(data: newData, encoding: .utf8) else {
-            return []
+            return Self.emptyResult
         }
 
         var messages: [AssistantMessage] = []
+        var interrupted = false
         var seen = seenMessageIds[sessionId] ?? []
         let lines = newContent.components(separatedBy: "\n")
 
         for line in lines where !line.isEmpty {
-            // Skip non-assistant messages quickly
+            if !interrupted && line.contains("\"type\":\"user\"") && line.contains("\"text\":\"[Request interrupted by user") {
+                interrupted = true
+            }
+
+            // Skip non-assistant messages (interrupt detection above still runs)
             guard line.contains("\"type\":\"assistant\"") else { continue }
 
             guard let lineData = line.data(using: .utf8),
@@ -135,7 +144,7 @@ actor ConversationParser {
         lastFileOffset[sessionId] = fileSize
         seenMessageIds[sessionId] = seen
 
-        return messages
+        return ParseResult(messages: messages, interrupted: interrupted)
     }
 
     /// Reset parsing state for a session
@@ -161,8 +170,7 @@ actor ConversationParser {
         seenMessageIds[sessionId] = []
     }
 
-    /// Build session file path from sessionId and cwd
-    private static func sessionFilePath(sessionId: String, cwd: String) -> String {
+    static func sessionFilePath(sessionId: String, cwd: String) -> String {
         let projectDir = cwd.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ".", with: "-")
         return "\(NSHomeDirectory())/.claude/projects/\(projectDir)/\(sessionId).jsonl"
     }
