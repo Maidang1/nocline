@@ -7,6 +7,7 @@ enum NotchiTask: String, CaseIterable {
         switch self {
         case .compacting: return 6.0
         case .sleeping: return 2.0
+        case .idle, .waiting: return 3.0
         default: return 4.0
         }
     }
@@ -97,7 +98,9 @@ struct NotchiState: Equatable {
     }
     var animationFPS: Double { task.animationFPS }
     var bobDuration: Double { task.bobDuration }
-    var bobAmplitude: CGFloat { task.bobAmplitude }
+    var bobAmplitude: CGFloat {
+        emotion == .sad ? task.bobAmplitude * 0.5 : task.bobAmplitude
+    }
     var swayAmplitude: Double { emotion.swayAmplitude }
     var canWalk: Bool { task.canWalk }
     var displayName: String { task.displayName }

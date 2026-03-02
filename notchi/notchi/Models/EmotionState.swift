@@ -16,10 +16,10 @@ final class EmotionState {
 
     static let emotionChangeThreshold = 0.6
     static let intensityDampen = 0.5
-    static let decayRate = 0.8
+    static let decayRate = 0.9
     static let interEmotionDecay = 0.9
     static let neutralCounterDecay = 0.7
-    static let decayInterval: Duration = .seconds(30)
+    static let decayInterval: Duration = .seconds(60)
 
     private var scoresDescription: String {
         scores

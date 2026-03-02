@@ -31,7 +31,7 @@ final class EmotionAnalyzer {
         Sad: frustration, anger, insults, complaints, feeling stuck, disappointment, negative profanity.
         Neutral: instructions, requests, task descriptions, questions, enthusiasm about work, factual statements. Exclamation marks or urgency about a task do NOT make it happy — only genuine positive sentiment toward the AI or outcome does.
         Default to neutral when unsure. Most coding instructions are neutral regardless of tone.
-        Intensity: 0.0 (barely noticeable) to 1.0 (very strong).
+        Intensity: 0.0 (barely noticeable) to 1.0 (very strong). ALL CAPS text indicates stronger emotion — increase intensity by 0.2-0.3 compared to the same message in lowercase.
         Reply with ONLY valid JSON: {"emotion": "...", "intensity": ...}
         """
 

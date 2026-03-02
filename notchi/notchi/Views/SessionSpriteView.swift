@@ -18,7 +18,7 @@ struct SessionSpriteView: View {
                 fps: state.animationFPS,
                 isAnimating: true
             )
-            .frame(width: 30, height: 30)
+            .frame(width: 32, height: 32)
             .offset(y: bobOffset(at: timeline.date, duration: state.bobDuration, amplitude: bobAmplitude))
         }
     }
