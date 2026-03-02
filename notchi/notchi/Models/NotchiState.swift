@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 
 enum NotchiTask: String, CaseIterable {
     case idle, working, sleeping, compacting, waiting
@@ -11,12 +11,7 @@ enum NotchiTask: String, CaseIterable {
         }
     }
 
-    var spritePrefix: String {
-        switch self {
-        case .waiting: return "compacting"
-        default: return rawValue
-        }
-    }
+    var spritePrefix: String { rawValue }
 
     var bobDuration: Double {
         switch self {
@@ -30,7 +25,8 @@ enum NotchiTask: String, CaseIterable {
     var bobAmplitude: CGFloat {
         switch self {
         case .sleeping, .compacting: return 0
-        case .idle, .waiting:        return 1.5
+        case .idle:                  return 1.5
+        case .waiting:               return 0.5
         case .working:               return 0.5
         }
     }
@@ -65,14 +61,14 @@ enum NotchiTask: String, CaseIterable {
 
     var frameCount: Int {
         switch self {
-        case .compacting, .waiting: return 5
+        case .compacting: return 5
         default: return 6
         }
     }
 
     var columns: Int {
         switch self {
-        case .compacting, .waiting: return 5
+        case .compacting: return 5
         default: return 6
         }
     }
@@ -94,7 +90,11 @@ struct NotchiState: Equatable {
     var task: NotchiTask
     var emotion: NotchiEmotion = .neutral
 
-    var spriteSheetName: String { "\(task.spritePrefix)_\(emotion.rawValue)" }
+    var spriteSheetName: String {
+        let name = "\(task.spritePrefix)_\(emotion.rawValue)"
+        if NSImage(named: name) != nil { return name }
+        return "\(task.spritePrefix)_neutral"
+    }
     var animationFPS: Double { task.animationFPS }
     var bobDuration: Double { task.bobDuration }
     var bobAmplitude: CGFloat { task.bobAmplitude }
