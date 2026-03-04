@@ -48,7 +48,7 @@ final class NotchiStateMachine {
             if let prompt = event.userPrompt {
                 Task {
                     let result = await EmotionAnalyzer.shared.analyze(prompt)
-                    EmotionState.shared.recordEmotion(result.emotion, intensity: result.intensity, prompt: prompt)
+                    session.emotionState.recordEmotion(result.emotion, intensity: result.intensity, prompt: prompt)
                 }
             }
 
@@ -179,7 +179,9 @@ final class NotchiStateMachine {
             while !Task.isCancelled {
                 try? await Task.sleep(for: EmotionState.decayInterval)
                 guard !Task.isCancelled else { return }
-                EmotionState.shared.decayAll()
+                for session in sessionStore.sessions.values {
+                    session.emotionState.decayAll()
+                }
             }
         }
     }

@@ -6,8 +6,6 @@ private let logger = Logger(subsystem: "com.ruban.notchi", category: "EmotionSta
 @MainActor
 @Observable
 final class EmotionState {
-    static let shared = EmotionState()
-
     private(set) var currentEmotion: NotchiEmotion = .neutral
     private(set) var scores: [NotchiEmotion: Double] = [
         .happy: 0.0,
@@ -28,7 +26,7 @@ final class EmotionState {
             .joined(separator: ", ")
     }
 
-    private init() {}
+    init() {}
 
     func recordEmotion(_ rawEmotion: String, intensity: Double, prompt: String) {
         let emotion = NotchiEmotion(rawValue: rawEmotion)

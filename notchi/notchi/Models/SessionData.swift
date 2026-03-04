@@ -20,8 +20,9 @@ final class SessionData: Identifiable {
     let spriteYOffset: CGFloat
 
     private(set) var task: NotchiTask = .idle
+    let emotionState = EmotionState()
     var state: NotchiState {
-        NotchiState(task: task, emotion: EmotionState.shared.currentEmotion)
+        NotchiState(task: task, emotion: emotionState.currentEmotion)
     }
     private(set) var isProcessing: Bool = false
     private(set) var lastActivity: Date
