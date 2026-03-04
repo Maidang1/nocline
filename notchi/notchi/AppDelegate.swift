@@ -34,6 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         observeScreenChanges()
         startHookServices()
         startUsageService()
+        updater.checkForUpdates()
     }
 
     private func startHookServices() {

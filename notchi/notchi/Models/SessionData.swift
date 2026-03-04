@@ -34,10 +34,12 @@ final class SessionData: Identifiable {
     private(set) var pendingQuestions: [PendingQuestion] = []
 
     private var durationTimer: Task<Void, Never>?
+    private var sleepTimer: Task<Void, Never>?
     private(set) var formattedDuration: String = "0m 00s"
 
     private static let maxEvents = 20
     private static let maxAssistantMessages = 10
+    private static let sleepDelay: Duration = .seconds(300)
 
     var projectName: String {
         (cwd as NSString).lastPathComponent
@@ -191,9 +193,20 @@ final class SessionData: Identifiable {
         recentAssistantMessages = []
     }
 
+    func resetSleepTimer() {
+        sleepTimer?.cancel()
+        sleepTimer = Task {
+            try? await Task.sleep(for: Self.sleepDelay)
+            guard !Task.isCancelled else { return }
+            updateTask(.sleeping)
+        }
+    }
+
     func endSession() {
         durationTimer?.cancel()
         durationTimer = nil
+        sleepTimer?.cancel()
+        sleepTimer = nil
         isProcessing = false
     }
 

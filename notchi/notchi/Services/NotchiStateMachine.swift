@@ -10,13 +10,11 @@ final class NotchiStateMachine {
 
     let sessionStore = SessionStore.shared
 
-    private var sleepTimer: Task<Void, Never>?
     private var emotionDecayTimer: Task<Void, Never>?
     private var pendingSyncTasks: [String: Task<Void, Never>] = [:]
     private var pendingPositionMarks: [String: Task<Void, Never>] = [:]
     private var fileWatchers: [String: (source: DispatchSourceFileSystemObject, fd: Int32)] = [:]
 
-    private static let sleepDelay: Duration = .seconds(300)
     private static let syncDebounce: Duration = .milliseconds(100)
     private static let waitingClearGuard: TimeInterval = 2.0
 
@@ -25,13 +23,10 @@ final class NotchiStateMachine {
     }
 
     private init() {
-        startSleepTimer()
         startEmotionDecayTimer()
     }
 
     func handleEvent(_ event: HookEvent) {
-        cancelSleepTimer()
-
         let session = sessionStore.process(event)
         let isDone = event.status == "waiting_for_input"
 
@@ -76,6 +71,7 @@ final class NotchiStateMachine {
             if sessionStore.activeSessionCount == 0 {
                 logger.info("Global state: idle")
             }
+            return
 
         default:
             if isDone && session.task != .idle {
@@ -83,23 +79,7 @@ final class NotchiStateMachine {
             }
         }
 
-        startSleepTimer()
-    }
-
-    private func startSleepTimer() {
-        sleepTimer = Task {
-            try? await Task.sleep(for: Self.sleepDelay)
-            guard !Task.isCancelled else { return }
-
-            for session in sessionStore.sessions.values {
-                session.updateTask(.sleeping)
-            }
-        }
-    }
-
-    private func cancelSleepTimer() {
-        sleepTimer?.cancel()
-        sleepTimer = nil
+        session.resetSleepTimer()
     }
 
     private func scheduleFileSync(sessionId: String, cwd: String) {
