@@ -9,8 +9,10 @@ struct SessionSpriteView: View {
         return isSelected ? state.bobAmplitude : state.bobAmplitude * 0.67
     }
 
+    private static let sobTrembleAmplitude: CGFloat = 0.2
+
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: bobAmplitude == 0)) { timeline in
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: bobAmplitude == 0 && state.emotion != .sob)) { timeline in
             SpriteSheetView(
                 spriteSheet: state.spriteSheetName,
                 frameCount: state.frameCount,
@@ -19,7 +21,10 @@ struct SessionSpriteView: View {
                 isAnimating: true
             )
             .frame(width: 32, height: 32)
-            .offset(y: bobOffset(at: timeline.date, duration: state.bobDuration, amplitude: bobAmplitude))
+            .offset(
+                x: trembleOffset(at: timeline.date, amplitude: state.emotion == .sob ? Self.sobTrembleAmplitude : 0),
+                y: bobOffset(at: timeline.date, duration: state.bobDuration, amplitude: bobAmplitude)
+            )
         }
     }
 }

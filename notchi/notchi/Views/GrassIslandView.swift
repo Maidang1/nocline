@@ -163,7 +163,7 @@ private struct GrassSpriteView: View {
     }
 
     private var isAnimatingMotion: Bool {
-        bobAmplitude > 0 || swayAmplitude > 0
+        bobAmplitude > 0 || swayAmplitude > 0 || state.emotion == .sob
     }
 
     private var bobDuration: Double {
@@ -176,6 +176,8 @@ private struct GrassSpriteView: View {
         let phase = (t / swayDuration).truncatingRemainder(dividingBy: 1.0)
         return sin(phase * .pi * 2) * swayAmplitude
     }
+
+    private static let sobTrembleAmplitude: CGFloat = 0.3
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !isAnimatingMotion)) { timeline in
@@ -198,7 +200,7 @@ private struct GrassSpriteView: View {
             }
             .rotationEffect(.degrees(swayDegrees(at: timeline.date)), anchor: .bottom)
             .offset(
-                x: SpriteLayout.xOffset(xPosition: xPosition, totalWidth: totalWidth),
+                x: SpriteLayout.xOffset(xPosition: xPosition, totalWidth: totalWidth) + trembleOffset(at: timeline.date, amplitude: state.emotion == .sob ? Self.sobTrembleAmplitude : 0),
                 y: yOffset + bobOffset(at: timeline.date, duration: bobDuration, amplitude: bobAmplitude)
             )
         }

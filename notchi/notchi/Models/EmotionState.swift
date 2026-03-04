@@ -13,6 +13,7 @@ final class EmotionState {
     ]
 
     static let emotionChangeThreshold = 0.6
+    static let sobEscalationThreshold = 0.85
     static let intensityDampen = 0.5
     static let decayRate = 0.9
     static let interEmotionDecay = 0.9
@@ -69,7 +70,11 @@ final class EmotionState {
         let best = scores.max(by: { $0.value < $1.value })
 
         if let best, best.value >= Self.emotionChangeThreshold {
-            currentEmotion = best.key
+            if best.key == .sad && best.value >= Self.sobEscalationThreshold {
+                currentEmotion = .sob
+            } else {
+                currentEmotion = best.key
+            }
         } else {
             currentEmotion = .neutral
         }
