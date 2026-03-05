@@ -12,12 +12,13 @@ final class EmotionState {
         .sad: 0.0
     ]
 
-    static let emotionChangeThreshold = 0.6
-    static let sobEscalationThreshold = 0.85
+    static let sadThreshold = 0.45
+    static let happyThreshold = 0.6
+    static let sobEscalationThreshold = 0.9
     static let intensityDampen = 0.5
-    static let decayRate = 0.9
+    static let decayRate = 0.92
     static let interEmotionDecay = 0.9
-    static let neutralCounterDecay = 0.7
+    static let neutralCounterDecay = 0.85
     static let decayInterval: Duration = .seconds(60)
 
     private var scoresDescription: String {
@@ -69,11 +70,16 @@ final class EmotionState {
     private func updateCurrentEmotion() {
         let best = scores.max(by: { $0.value < $1.value })
 
-        if let best, best.value >= Self.emotionChangeThreshold {
-            if best.key == .sad && best.value >= Self.sobEscalationThreshold {
-                currentEmotion = .sob
+        if let best {
+            let threshold = best.key == .sad ? Self.sadThreshold : Self.happyThreshold
+            if best.value >= threshold {
+                if best.key == .sad && best.value >= Self.sobEscalationThreshold {
+                    currentEmotion = .sob
+                } else {
+                    currentEmotion = best.key
+                }
             } else {
-                currentEmotion = best.key
+                currentEmotion = .neutral
             }
         } else {
             currentEmotion = .neutral
