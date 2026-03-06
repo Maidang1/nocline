@@ -1,0 +1,52 @@
+# Notchi
+
+A macOS notch companion that reacts to Claude Code activity in real-time.
+
+<!-- TODO: add screenshot/gif -->
+
+## What it does
+
+- Lives in the Mac notch area as an animated Claude mascot on a grass island
+- Reacts to Claude Code events in real-time (thinking, working, errors, completions)
+- Analyzes conversation sentiment to show emotions (happy, sad, neutral, sob)
+- Shows thought bubbles with contextual commentary
+- Click to expand and see session stats (duration, tokens, cost estimate, activity feed)
+- Supports multiple concurrent Claude Code sessions with individual sprites
+- Sound effects for events (optional, auto-muted when terminal is focused)
+- Auto-updates via Sparkle
+
+## Install
+
+1. Download `Notchi-x.x.x.dmg` from the [latest GitHub Release](https://github.com/sk-ruban/notchi/releases/latest)
+2. Open the DMG and drag Notchi to Applications
+3. Launch Notchi -- it auto-installs Claude Code hooks on first launch
+4. Start using Claude Code and watch Notchi react
+
+## Requirements
+
+- macOS 15.0+ (Sequoia)
+- MacBook with notch
+- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) installed
+
+## How it works
+
+```
+Claude Code --> Hooks (shell scripts) --> Unix Socket --> Event Parser --> State Machine --> Animated Sprites
+```
+
+Notchi registers shell script hooks with Claude Code on launch. When Claude Code emits events (tool use, thinking, prompts, session start/end), the hook script sends JSON payloads to a Unix socket. The app parses these events, runs them through a state machine that maps to sprite animations (idle, working, sleeping, compacting, waiting), and uses the Anthropic API to analyze user prompt sentiment for emotional reactions.
+
+Each Claude Code session gets its own sprite on the grass island. Clicking expands the notch panel to show a live activity feed, session info, and API usage stats.
+
+## Build from source
+
+```bash
+git clone https://github.com/sk-ruban/notchi.git
+cd notchi
+open notchi/notchi.xcodeproj
+# Press Cmd+R in Xcode to build and run
+```
+
+## License
+
+MIT

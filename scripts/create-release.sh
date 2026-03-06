@@ -74,8 +74,8 @@ if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     fail "Version must be in semver format (e.g. 1.1.0), got: $VERSION"
 fi
 
-ZIP_NAME="${APP_NAME}-${VERSION}.zip"
-ZIP_PATH="${BUILD_DIR}/${ZIP_NAME}"
+DMG_NAME="${APP_NAME}-${VERSION}.dmg"
+DMG_PATH="${BUILD_DIR}/${DMG_NAME}"
 
 step "Starting release build for ${APP_NAME} v${VERSION}"
 
@@ -153,21 +153,38 @@ xcrun stapler staple "$APP_PATH"
 
 echo "Notarization complete and stapled into ${APP_PATH}"
 
-# --- Step 5: Create zip ---
-step "Step 4/6: Create distribution zip"
+# --- Step 5: Create DMG ---
+step "Step 4/6: Create distribution DMG"
 
-pushd "$EXPORT_DIR" > /dev/null
-ditto -c -k --keepParent "${APP_NAME}.app" "../${ZIP_NAME}"
-popd > /dev/null
+DMG_TEMP_DIR="${BUILD_DIR}/dmg-staging"
+rm -rf "$DMG_TEMP_DIR"
+mkdir -p "$DMG_TEMP_DIR"
 
-if [[ ! -f "$ZIP_PATH" ]]; then
-    fail "Zip creation failed: ${ZIP_PATH} not found"
+cp -R "$APP_PATH" "$DMG_TEMP_DIR/"
+ln -s /Applications "$DMG_TEMP_DIR/Applications"
+
+hdiutil create \
+    -volname "$APP_NAME" \
+    -srcfolder "$DMG_TEMP_DIR" \
+    -ov \
+    -format UDZO \
+    "$DMG_PATH"
+
+rm -rf "$DMG_TEMP_DIR"
+
+if [[ ! -f "$DMG_PATH" ]]; then
+    fail "DMG creation failed: ${DMG_PATH} not found"
 fi
 
-echo "Created ${ZIP_PATH}"
+echo "Created ${DMG_PATH}"
 
 # --- Step 6: Sign with Sparkle ---
-step "Step 5/6: Sign zip with Sparkle"
+step "Step 5/6: Sign DMG with Sparkle"
+
+SPARKLE_KEY_FILE=".sparkle-keys/eddsa_private_key"
+if [[ ! -f "$SPARKLE_KEY_FILE" ]]; then
+    fail "Sparkle private key not found at ${SPARKLE_KEY_FILE}. Run generate_keys and save the key there."
+fi
 
 SPARKLE_BIN_DIR=$(find_sparkle_bin_dir)
 SIGN_UPDATE="${SPARKLE_BIN_DIR}/sign_update"
@@ -183,7 +200,7 @@ fi
 
 echo "Using Sparkle tools from: ${SPARKLE_BIN_DIR}"
 
-SIGNATURE=$("$SIGN_UPDATE" "$ZIP_PATH")
+SIGNATURE=$("$SIGN_UPDATE" --ed-key-file "$SPARKLE_KEY_FILE" "$DMG_PATH")
 echo "Sparkle signature:"
 echo "$SIGNATURE"
 
@@ -192,8 +209,18 @@ step "Step 6/6: Generate appcast"
 
 mkdir -p "$(dirname "$APPCAST_OUTPUT")"
 
-# generate_appcast expects a directory containing the signed zips
-"$GENERATE_APPCAST" "$BUILD_DIR" -o "$APPCAST_OUTPUT"
+APPCAST_STAGING="${BUILD_DIR}/appcast-staging"
+rm -rf "$APPCAST_STAGING"
+mkdir -p "$APPCAST_STAGING"
+cp "$DMG_PATH" "$APPCAST_STAGING/"
+
+"$GENERATE_APPCAST" \
+    --ed-key-file "$SPARKLE_KEY_FILE" \
+    --download-url-prefix "https://github.com/sk-ruban/notchi/releases/download/v${VERSION}/" \
+    -o "$APPCAST_OUTPUT" \
+    "$APPCAST_STAGING"
+
+rm -rf "$APPCAST_STAGING"
 
 echo "Appcast written to ${APPCAST_OUTPUT}"
 
@@ -201,11 +228,11 @@ echo "Appcast written to ${APPCAST_OUTPUT}"
 step "Release v${VERSION} built successfully!"
 
 echo "Files:"
-echo "  Zip:     ${ZIP_PATH}"
+echo "  DMG:     ${DMG_PATH}"
 echo "  Appcast: ${APPCAST_OUTPUT}"
 echo ""
 echo "Next steps:"
 echo "  1. Create a GitHub Release tagged v${VERSION}"
-echo "  2. Upload ${ZIP_PATH} to the GitHub Release"
+echo "  2. Upload ${DMG_PATH} to the GitHub Release"
 echo "  3. Commit ${APPCAST_OUTPUT} and push to main"
 echo "  4. Verify the appcast download URL matches your GitHub Release asset URL"

@@ -35,6 +35,7 @@ Package.resolved
 
 # Secrets
 .env
+.sparkle-keys/
 
 # Claude
 CLAUDE.md
