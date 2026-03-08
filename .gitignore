@@ -48,6 +48,11 @@ FUTURE_WORK.md
 *.app
 *.pkg
 
+# Website
+website/node_modules/
+website/dist/
+website/.astro/
+
 # Temporary
 *.log
 tmp/
