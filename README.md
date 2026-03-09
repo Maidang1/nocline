@@ -2,7 +2,7 @@
 
 A macOS notch companion that reacts to Claude Code activity in real-time.
 
-<video src="https://github.com/sk-ruban/notchi/releases/download/v1.0.0/Notchi4.mp4" controls autoplay muted loop width="600"></video>
+<video src="assets/demo.mp4" controls autoplay muted loop width="600"></video>
 
 ## What it does
 
