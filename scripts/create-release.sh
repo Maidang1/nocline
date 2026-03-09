@@ -143,10 +143,16 @@ echo "Exported ${APP_PATH}"
 # --- Step 4: Notarize and staple ---
 step "Step 3/6: Notarize and staple"
 
+NOTARIZE_ZIP="${BUILD_DIR}/notchi-submit.zip"
+echo "Creating zip for notarization..."
+ditto -c -k --keepParent "$APP_PATH" "$NOTARIZE_ZIP"
+
 echo "Submitting for notarization..."
-xcrun notarytool submit "$APP_PATH" \
+xcrun notarytool submit "$NOTARIZE_ZIP" \
     --keychain-profile "$NOTARYTOOL_PROFILE" \
     --wait
+
+rm -f "$NOTARIZE_ZIP"
 
 echo "Stapling notarization ticket..."
 xcrun stapler staple "$APP_PATH"
