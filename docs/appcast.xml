@@ -12,7 +12,8 @@
             <sparkle:version>1</sparkle:version>
             <sparkle:shortVersionString>1.0.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/sk-ruban/notchi/releases/download/v1.0.0/Notchi-1.0.0.dmg" length="3894964" type="application/octet-stream"/>
+            <enclosure url="https://github.com/sk-ruban/notchi/releases/download/v1.0.0/Notchi-1.0.0.dmg" length="3487808" type="application/octet-stream"/>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
         </item>
     </channel>
 </rss>
