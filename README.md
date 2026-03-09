@@ -2,7 +2,7 @@
 
 A macOS notch companion that reacts to Claude Code activity in real-time.
 
-https://github.com/user-attachments/assets/91960eb7-fb58-4196-ad5f-be3e6b5fa6bf
+https://github.com/user-attachments/assets/e417bd40-cae8-47c0-998a-905166cf3513
 
 ## What it does
 
@@ -43,6 +43,11 @@ Claude Code --> Hooks (shell scripts) --> Unix Socket --> Event Parser --> State
 Notchi registers shell script hooks with Claude Code on launch. When Claude Code emits events (tool use, thinking, prompts, session start/end), the hook script sends JSON payloads to a Unix socket. The app parses these events, runs them through a state machine that maps to sprite animations (idle, working, sleeping, compacting, waiting), and uses the Anthropic API to analyze user prompt sentiment for emotional reactions.
 
 Each Claude Code session gets its own sprite on the grass island. Clicking expands the notch panel to show a live activity feed, session info, and API usage stats.
+
+## Credits
+
+- [Claude Island](https://github.com/farouqaldori/claude-island)
+- [Readout](https://readout.org)
 
 ## License
 
