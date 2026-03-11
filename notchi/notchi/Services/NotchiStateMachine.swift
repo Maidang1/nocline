@@ -49,17 +49,17 @@ final class NotchiStateMachine {
 
         case "PreToolUse":
             if isDone {
-                SoundService.shared.playNotificationSound()
+                SoundService.shared.playNotificationSound(sessionId: event.sessionId)
             }
 
         case "PermissionRequest":
-            SoundService.shared.playNotificationSound()
+            SoundService.shared.playNotificationSound(sessionId: event.sessionId)
 
         case "PostToolUse":
             scheduleFileSync(sessionId: event.sessionId, cwd: event.cwd)
 
         case "Stop":
-            SoundService.shared.playNotificationSound()
+            SoundService.shared.playNotificationSound(sessionId: event.sessionId)
             stopFileWatcher(sessionId: event.sessionId)
             scheduleFileSync(sessionId: event.sessionId, cwd: event.cwd)
 
@@ -67,6 +67,7 @@ final class NotchiStateMachine {
             stopFileWatcher(sessionId: event.sessionId)
             pendingSyncTasks.removeValue(forKey: event.sessionId)?.cancel()
             pendingPositionMarks.removeValue(forKey: event.sessionId)?.cancel()
+            SoundService.shared.clearCooldown(for: event.sessionId)
             Task { await ConversationParser.shared.resetState(for: event.sessionId) }
             if sessionStore.activeSessionCount == 0 {
                 logger.info("Global state: idle")
@@ -75,7 +76,7 @@ final class NotchiStateMachine {
 
         default:
             if isDone && session.task != .idle {
-                SoundService.shared.playNotificationSound()
+                SoundService.shared.playNotificationSound(sessionId: event.sessionId)
             }
         }
 
