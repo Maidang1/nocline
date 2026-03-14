@@ -6,19 +6,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var notchPanel: NotchPanel?
     private let windowHeight: CGFloat = 500
 
-    private let updater: SPUUpdater
+    private var updater: SPUUpdater!
     private let userDriver: NotchUserDriver
+    private let updaterDelegate = SparkleDelegate()
 
     override init() {
         userDriver = NotchUserDriver()
+        super.init()
+
         updater = SPUUpdater(
             hostBundle: Bundle.main,
             applicationBundle: Bundle.main,
             userDriver: userDriver,
-            delegate: nil
+            delegate: updaterDelegate
         )
-        super.init()
-
         UpdateManager.shared.setUpdater(updater)
 
         do {
@@ -111,4 +112,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ClaudeUsageService.shared.startPolling()
     }
 
+}
+
+// MARK: - SPUUpdaterDelegate
+
+private class SparkleDelegate: NSObject, SPUUpdaterDelegate {
+    func feedURLString(for updater: SPUUpdater) -> String? {
+        "https://updates.notchi.app/appcast.xml"
+    }
 }

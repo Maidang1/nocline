@@ -160,6 +160,7 @@ class UpdateManager: NSObject, ObservableObject {
         installHandler?(.dismiss)
         installHandler = nil
         cancellationHandler = nil
+        if case .upToDate = state { return }
         state = .idle
     }
 }
