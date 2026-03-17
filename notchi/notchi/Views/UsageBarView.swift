@@ -4,13 +4,23 @@ struct UsageBarView: View {
     let usage: QuotaPeriod?
     let isLoading: Bool
     let error: String?
+    let statusMessage: String?
+    let isStale: Bool
+    let recoveryAction: ClaudeUsageRecoveryAction
     var compact: Bool = false
     var isEnabled: Bool = AppSettings.isUsageEnabled
     var onConnect: (() -> Void)?
     var onRetry: (() -> Void)?
 
-    private var isStale: Bool {
-        error != nil && usage != nil
+    private var actionHint: String? {
+        switch recoveryAction {
+        case .retry:
+            return "(tap to retry)"
+        case .reconnect:
+            return "(tap to reconnect)"
+        case .none:
+            return nil
+        }
     }
 
     private var effectivePercentage: Int {
@@ -57,21 +67,27 @@ struct UsageBarView: View {
                         Text(error)
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(TerminalColors.dimmedText)
-                        Text("(tap to retry)")
-                            .font(.system(size: 10))
-                            .foregroundColor(TerminalColors.dimmedText)
-                    }
-                } else if let usage, let resetTime = usage.formattedResetTime {
-                    HStack(spacing: 4) {
-                        Text("Resets in \(resetTime)")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(TerminalColors.secondaryText)
-                        if isStale {
-                            Text("(tap to reconnect)")
+                        if let actionHint {
+                            Text(actionHint)
                                 .font(.system(size: 10))
                                 .foregroundColor(TerminalColors.dimmedText)
                         }
                     }
+                } else if let usage, let resetTime = usage.formattedResetTime {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Resets in \(resetTime)")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(TerminalColors.secondaryText)
+                        if let statusMessage {
+                            Text(statusMessage)
+                                .font(.system(size: 10))
+                                .foregroundColor(TerminalColors.dimmedText)
+                        }
+                    }
+                } else if let statusMessage, usage != nil {
+                    Text(statusMessage)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(TerminalColors.dimmedText)
                 } else {
                     Text("Claude Usage")
                         .font(.system(size: 11, weight: .medium))
@@ -92,10 +108,13 @@ struct UsageBarView: View {
         }
         .contentShape(Rectangle())
         .onTapGesture {
-            if error != nil, usage == nil {
+            switch recoveryAction {
+            case .retry:
                 onRetry?()
-            } else if isStale {
+            case .reconnect:
                 onConnect?()
+            case .none:
+                break
             }
         }
         .padding(.top, compact ? 0 : 5)

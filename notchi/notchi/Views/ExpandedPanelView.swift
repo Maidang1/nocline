@@ -116,6 +116,9 @@ struct ExpandedPanelView: View {
                     usage: usageService.currentUsage,
                     isLoading: usageService.isLoading,
                     error: usageService.error,
+                    statusMessage: usageService.statusMessage,
+                    isStale: usageService.isUsageStale,
+                    recoveryAction: usageService.recoveryAction,
                     onConnect: { ClaudeUsageService.shared.connectAndStartPolling() },
                     onRetry: { ClaudeUsageService.shared.retryNow() }
                 )
@@ -159,6 +162,9 @@ struct ExpandedPanelView: View {
                     usage: usageService.currentUsage,
                     isLoading: usageService.isLoading,
                     error: usageService.error,
+                    statusMessage: usageService.statusMessage,
+                    isStale: usageService.isUsageStale,
+                    recoveryAction: usageService.recoveryAction,
                     compact: isActivityCollapsed,
                     onConnect: { ClaudeUsageService.shared.connectAndStartPolling() },
                     onRetry: { ClaudeUsageService.shared.retryNow() }
