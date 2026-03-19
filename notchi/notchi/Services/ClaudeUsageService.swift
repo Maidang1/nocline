@@ -182,10 +182,18 @@ final class ClaudeUsageService {
 
         Task {
             let accessToken: String
+            let silentCredentials = dependencies.getOAuthCredentials(false)
+
             if let cachedToken = dependencies.getCachedOAuthToken() {
-                accessToken = cachedToken
-            } else if let credentials = dependencies.getOAuthCredentials(false) {
-                accessToken = credentials.accessToken
+                if let silentCredentials, silentCredentials.accessToken != cachedToken {
+                    accessToken = silentCredentials.accessToken
+                    dependencies.cacheOAuthToken(accessToken)
+                    logger.info("Startup adopted Claude Code credential token over mismatched cached token")
+                } else {
+                    accessToken = cachedToken
+                }
+            } else if let silentCredentials {
+                accessToken = silentCredentials.accessToken
                 dependencies.cacheOAuthToken(accessToken)
                 logger.info("Recovered cached OAuth token from Claude Code credentials for background polling")
             } else {
