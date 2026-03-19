@@ -247,10 +247,7 @@ final class ClaudeUsageService {
             }
 
             if let remainingBackoff = activeOAuthBackoffRemaining() {
-                presentOAuthBackoffState(
-                    remaining: remainingBackoff,
-                    usingHeadersFallback: didSucceedWithHeadersFallbackInOAuthBackoff
-                )
+                presentOAuthBackoffState(remaining: remainingBackoff)
                 scheduleBackoffTimer(remaining: remainingBackoff)
                 return
             }
@@ -340,10 +337,7 @@ final class ClaudeUsageService {
 
         if let remainingBackoff = activeOAuthBackoffRemaining() {
             logger.info("Skipping OAuth fetch while active backoff remains for \(Int(remainingBackoff))s")
-            presentOAuthBackoffState(
-                remaining: remainingBackoff,
-                usingHeadersFallback: didSucceedWithHeadersFallbackInOAuthBackoff
-            )
+            presentOAuthBackoffState(remaining: remainingBackoff)
             scheduleBackoffTimer(remaining: remainingBackoff)
             return
         }
@@ -483,19 +477,14 @@ final class ClaudeUsageService {
             guard let httpResponse = response as? HTTPURLResponse else {
                 presentRetryableIssue(
                     noUsageMessage: "Invalid response, retrying in \(Int(pollInterval))s",
-                    staleMessage: "Stale response, retrying in \(Int(pollInterval))s"
+                    staleMessage: "Updating soon"
                 )
                 schedulePollTimer()
                 return .handled
             }
 
             guard httpResponse.statusCode == 200 else {
-                let headers = httpResponse.allHeaderFields.map { "\($0.key): \($0.value)" }.joined(separator: ", ")
-                logger.warning("OAuth HTTP \(httpResponse.statusCode) — headers: \(headers)")
-
                 if httpResponse.statusCode == 429 {
-                    let body = String(data: data, encoding: .utf8) ?? "<unreadable>"
-                    logger.warning("429 response body: \(body)")
                     consecutiveRateLimits += 1
 
                     if consecutiveRateLimits >= 3,
@@ -516,6 +505,7 @@ final class ClaudeUsageService {
                     }
 
                     beginOAuthBackoff(delay: backoffDelay)
+                    logger.warning("OAuth 429 entered backoff for \(Int(backoffDelay))s (attempt \(self.consecutiveRateLimits))")
 
                     if !didAttemptHeadersFallbackInOAuthBackoff {
                         didAttemptHeadersFallbackInOAuthBackoff = true
@@ -531,24 +521,26 @@ final class ClaudeUsageService {
                         )
                         if case .success = fallbackResult {
                             logger.info(
-                                "Rate limited (429), using headers fallback with \(Int(Self.headersFallbackRefreshInterval))s refreshes and OAuth re-probe in \(Int(Self.headersFallbackOAuthProbeInterval))s"
+                                "OAuth 429 switched to headers refreshes every \(Int(Self.headersFallbackRefreshInterval))s with OAuth re-probe in \(Int(Self.headersFallbackOAuthProbeInterval))s"
                             )
                             return .handled
                         }
                         if hadCurrentUsage {
                             clearTransientState()
                             beginHeadersFallbackProbeWindow()
-                            logger.info("Keeping last good usage visible after OAuth 429 while waiting for refreshed headers")
+                            logger.info("OAuth 429 keeping the last good usage visible while headers refreshes continue")
                             scheduleHeadersFallbackActiveTimer()
                             return .handled
                         }
                     }
 
-                    logger.warning("Rate limited (429), backing off \(Int(backoffDelay))s (attempt \(self.consecutiveRateLimits))")
-                    presentOAuthBackoffState(remaining: backoffDelay, usingHeadersFallback: false)
+                    presentOAuthBackoffState(remaining: backoffDelay)
                     scheduleBackoffTimer(remaining: backoffDelay)
                     return .handled
                 }
+
+                let headers = httpResponse.allHeaderFields.map { "\($0.key): \($0.value)" }.joined(separator: ", ")
+                logger.warning("OAuth HTTP \(httpResponse.statusCode) — headers: \(headers)")
 
                 if httpResponse.statusCode == 403 {
                     return handleOAuthForbidden(data: data, response: httpResponse)
@@ -567,7 +559,7 @@ final class ClaudeUsageService {
                 clearOAuthBackoffState()
                 presentRetryableIssue(
                     noUsageMessage: "HTTP \(httpResponse.statusCode), retrying in \(Int(pollInterval))s",
-                    staleMessage: "Stale (HTTP \(httpResponse.statusCode)), retrying in \(Int(pollInterval))s"
+                    staleMessage: "Updating soon"
                 )
                 schedulePollTimer()
                 logger.warning("API error: HTTP \(httpResponse.statusCode)")
@@ -588,7 +580,7 @@ final class ClaudeUsageService {
         } catch {
             presentRetryableIssue(
                 noUsageMessage: "Network error, retrying in \(Int(pollInterval))s",
-                staleMessage: "Stale network data, retrying in \(Int(pollInterval))s"
+                staleMessage: "Updating soon"
             )
             logger.error("OAuth fetch failed: \(error.localizedDescription)")
             schedulePollTimer()
@@ -638,7 +630,7 @@ final class ClaudeUsageService {
                 }
                 presentRetryableIssue(
                     noUsageMessage: "Invalid response, retrying in \(Int(pollInterval))s",
-                    staleMessage: "Stale response, retrying in \(Int(pollInterval))s"
+                    staleMessage: "Updating soon"
                 )
                 schedulePollTimer()
                 return .handled
@@ -662,7 +654,7 @@ final class ClaudeUsageService {
                 if allowMissingHeadersRetry {
                     presentRetryableIssue(
                         noUsageMessage: "No rate limit headers, retrying in \(Int(pollInterval))s",
-                        staleMessage: "Stale, retrying in \(Int(pollInterval))s"
+                        staleMessage: "Updating soon"
                     )
                     schedulePollTimer()
                 }
@@ -709,7 +701,7 @@ final class ClaudeUsageService {
             }
             presentRetryableIssue(
                 noUsageMessage: "Network error, retrying in \(Int(pollInterval))s",
-                staleMessage: "Stale network data, retrying in \(Int(pollInterval))s"
+                staleMessage: "Updating soon"
             )
             logger.error("Headers fetch failed: \(error.localizedDescription)")
             schedulePollTimer()
@@ -1035,7 +1027,7 @@ final class ClaudeUsageService {
         schedulePollTimer(interval: nextInterval, minimumInterval: nextInterval)
     }
 
-    private func presentOAuthBackoffState(remaining: TimeInterval, usingHeadersFallback: Bool) {
+    private func presentOAuthBackoffState(remaining: TimeInterval) {
         recoveryAction = .retry
         let roundedDelay = Int(ceil(remaining))
 
@@ -1047,9 +1039,7 @@ final class ClaudeUsageService {
         }
 
         error = nil
-        statusMessage = usingHeadersFallback
-            ? "Fallback due to rate limit, retry in \(roundedDelay)s"
-            : "Stale, retrying in \(roundedDelay)s"
+        statusMessage = "Updating in \(roundedDelay)s"
         isUsageStale = true
     }
 
@@ -1074,10 +1064,7 @@ final class ClaudeUsageService {
             }
         }
 
-        presentOAuthBackoffState(
-            remaining: remaining,
-            usingHeadersFallback: didSucceedWithHeadersFallbackInOAuthBackoff
-        )
+        presentOAuthBackoffState(remaining: remaining)
         scheduleBackoffTimer(remaining: remaining)
     }
 
@@ -1088,7 +1075,7 @@ final class ClaudeUsageService {
             clearOAuthBackoffState()
             presentRetryableIssue(
                 noUsageMessage: "No rate limit headers, retrying in \(Int(pollInterval))s",
-                staleMessage: "Stale, retrying in \(Int(pollInterval))s"
+                staleMessage: "Updating soon"
             )
             schedulePollTimer()
             return .handled
@@ -1128,7 +1115,7 @@ final class ClaudeUsageService {
             clearTransientState()
             logger.info("Restored active headers fallback recovery state from persistence")
         } else if hasActiveOAuthBackoff {
-            logger.info("Restored OAuth backoff recovery state from persistence")
+            logger.info("Restored OAuth recovery timing from persistence")
         }
     }
 
@@ -1185,7 +1172,7 @@ final class ClaudeUsageService {
             isUsageStale = false
         } else {
             error = nil
-            statusMessage = message
+            statusMessage = "Reconnect Claude Code"
             isUsageStale = true
         }
     }

@@ -22,6 +22,41 @@ private final class PollSchedulerSpy {
     }
 }
 
+private final class RequestRecorder {
+    private(set) var paths: [String] = []
+
+    @discardableResult
+    func record(_ request: URLRequest) -> String {
+        let path = request.url?.path ?? ""
+        paths.append(path)
+        return path
+    }
+
+    func reset() {
+        paths.removeAll()
+    }
+
+    func assertOAuthOnly(file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertEqual(paths, ["/api/oauth/usage"], file: file, line: line)
+    }
+
+    func assertHeadersOnly(
+        count: Int = 1,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        XCTAssertEqual(paths, Array(repeating: "/v1/messages", count: count), file: file, line: line)
+    }
+
+    func assertMixed(
+        _ expected: [String],
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        XCTAssertEqual(paths, expected, file: file, line: line)
+    }
+}
+
 @MainActor
 final class ClaudeUsageServiceTests: XCTestCase {
     override func tearDown() {
@@ -45,7 +80,7 @@ final class ClaudeUsageServiceTests: XCTestCase {
         let service = ClaudeUsageService(dependencies: dependencies)
         service.currentUsage = makeQuotaPeriod(utilization: 8)
         service.error = "Old error"
-        service.statusMessage = "Stale, retrying in 120s"
+        service.statusMessage = "Updating in 120s"
         service.isUsageStale = true
         service.recoveryAction = .retry
 
@@ -60,35 +95,25 @@ final class ClaudeUsageServiceTests: XCTestCase {
     }
 
     func testStartPollingDuringActiveHeadersFallbackDoesNotSendOAuthImmediately() async throws {
-        let scheduler = PollSchedulerSpy()
         let now = Date(timeIntervalSince1970: 100)
-        var requestURLs: [String] = []
-        let dependencies = makeDependencies(
-            scheduler: scheduler,
-            resolveUserAgent: { "claude-code/2.1.77" },
-            getCachedOAuthToken: { "token" },
+        let recorder = RequestRecorder()
+        let (service, scheduler) = makeService(
             now: { now },
-            fetchUsage: { request in
-                let path = request.url?.path ?? ""
-                requestURLs.append(path)
-                if path == "/api/oauth/usage" {
-                    return (Data(), self.makeResponse(statusCode: 429))
-                }
-                return (Data(), self.makeResponse(statusCode: 200, url: self.messagesURL))
+            cachedToken: { "token" },
+            fetchUsage: oauth429ThenHeaders(recorder: recorder) { _, _ in
+                (Data(), self.makeResponse(statusCode: 200, url: self.messagesURL))
             }
         )
-
-        let service = ClaudeUsageService(dependencies: dependencies)
         service.currentUsage = self.makeQuotaPeriod(utilization: 46)
         await service.performFetch(with: "token")
-        XCTAssertEqual(requestURLs, ["/api/oauth/usage", "/v1/messages"])
+        recorder.assertMixed(["/api/oauth/usage", "/v1/messages"])
 
-        requestURLs.removeAll()
+        recorder.reset()
         service.startPolling()
         await Task.yield()
         await Task.yield()
 
-        XCTAssertTrue(requestURLs.isEmpty)
+        XCTAssertTrue(recorder.paths.isEmpty)
         XCTAssertEqual(service.currentUsage?.usagePercentage, 46)
         XCTAssertNil(service.statusMessage)
         XCTAssertFalse(service.isUsageStale)
@@ -160,7 +185,7 @@ final class ClaudeUsageServiceTests: XCTestCase {
         XCTAssertFalse(fetchCalled)
         XCTAssertEqual(service.currentUsage?.usagePercentage, 52)
         XCTAssertNil(service.error)
-        XCTAssertEqual(service.statusMessage, "Stale, retrying in 120s")
+        XCTAssertEqual(service.statusMessage, "Updating in 120s")
         XCTAssertTrue(service.isUsageStale)
         XCTAssertEqual(service.recoveryAction, .retry)
         XCTAssertEqual(scheduler.intervals, [120])
@@ -262,25 +287,15 @@ final class ClaudeUsageServiceTests: XCTestCase {
     }
 
     func testRateLimitWithoutCachedUsageShowsRetryState() async throws {
-        let scheduler = PollSchedulerSpy()
-        var requestURLs: [String] = []
-        let dependencies = makeDependencies(
-            scheduler: scheduler,
-            resolveUserAgent: { "claude-code/2.1.77" },
-            fetchUsage: { request in
-                let path = request.url?.path ?? ""
-                requestURLs.append(path)
-                if path == "/api/oauth/usage" {
-                    return (Data(), self.makeResponse(statusCode: 429, headers: ["Retry-After": "0"]))
-                }
-                return (Data(), self.makeResponse(statusCode: 200, url: self.messagesURL))
+        let recorder = RequestRecorder()
+        let (service, scheduler) = makeService(
+            fetchUsage: oauth429ThenHeaders(recorder: recorder, retryAfter: "0") { _, _ in
+                (Data(), self.makeResponse(statusCode: 200, url: self.messagesURL))
             }
         )
-
-        let service = ClaudeUsageService(dependencies: dependencies)
         await service.performFetch(with: "token")
 
-        XCTAssertEqual(requestURLs, ["/api/oauth/usage", "/v1/messages"])
+        recorder.assertMixed(["/api/oauth/usage", "/v1/messages"])
         XCTAssertNil(service.currentUsage)
         XCTAssertEqual(service.error, "Rate limited, retrying in 120s")
         XCTAssertNil(service.statusMessage)
@@ -290,25 +305,15 @@ final class ClaudeUsageServiceTests: XCTestCase {
     }
 
     func testPositiveRetryAfterHeaderRaisesBackoffDelay() async throws {
-        let scheduler = PollSchedulerSpy()
-        var requestURLs: [String] = []
-        let dependencies = makeDependencies(
-            scheduler: scheduler,
-            resolveUserAgent: { "claude-code/2.1.77" },
-            fetchUsage: { request in
-                let path = request.url?.path ?? ""
-                requestURLs.append(path)
-                if path == "/api/oauth/usage" {
-                    return (Data(), self.makeResponse(statusCode: 429, headers: ["Retry-After": "300"]))
-                }
-                return (Data(), self.makeResponse(statusCode: 200, url: self.messagesURL))
+        let recorder = RequestRecorder()
+        let (service, scheduler) = makeService(
+            fetchUsage: oauth429ThenHeaders(recorder: recorder, retryAfter: "300") { _, _ in
+                (Data(), self.makeResponse(statusCode: 200, url: self.messagesURL))
             }
         )
-
-        let service = ClaudeUsageService(dependencies: dependencies)
         await service.performFetch(with: "token")
 
-        XCTAssertEqual(requestURLs, ["/api/oauth/usage", "/v1/messages"])
+        recorder.assertMixed(["/api/oauth/usage", "/v1/messages"])
         XCTAssertEqual(service.error, "Rate limited, retrying in 300s")
         XCTAssertEqual(scheduler.intervals, [300])
     }
@@ -348,25 +353,15 @@ final class ClaudeUsageServiceTests: XCTestCase {
     }
 
     func testManualRetryDuringActiveBackoffDoesNotSendOAuthAgainWhenHeadersAlreadyTried() async throws {
-        let scheduler = PollSchedulerSpy()
         let now = Date(timeIntervalSince1970: 100)
-        var requestURLs: [String] = []
-        let dependencies = makeDependencies(
-            scheduler: scheduler,
-            resolveUserAgent: { "claude-code/2.1.77" },
-            getCachedOAuthToken: { "token" },
+        let recorder = RequestRecorder()
+        let (service, scheduler) = makeService(
             now: { now },
-            fetchUsage: { request in
-                let path = request.url?.path ?? ""
-                requestURLs.append(path)
-                if path == "/api/oauth/usage" {
-                    return (Data(), self.makeResponse(statusCode: 429))
-                }
-                return (Data(), self.makeResponse(statusCode: 200, url: self.messagesURL))
+            cachedToken: { "token" },
+            fetchUsage: oauth429ThenHeaders(recorder: recorder) { _, _ in
+                (Data(), self.makeResponse(statusCode: 200, url: self.messagesURL))
             }
         )
-
-        let service = ClaudeUsageService(dependencies: dependencies)
         service.startPolling()
         await Task.yield()
         await Task.yield()
@@ -374,7 +369,7 @@ final class ClaudeUsageServiceTests: XCTestCase {
         await Task.yield()
         await Task.yield()
 
-        XCTAssertEqual(requestURLs, ["/api/oauth/usage", "/v1/messages"])
+        recorder.assertMixed(["/api/oauth/usage", "/v1/messages"])
         XCTAssertEqual(service.error, "Rate limited, retrying in 120s")
         XCTAssertNil(service.statusMessage)
         XCTAssertEqual(service.recoveryAction, .retry)
@@ -382,31 +377,25 @@ final class ClaudeUsageServiceTests: XCTestCase {
     }
 
     func testRetryAfterBackoffExpiryUsesOAuthAgainAndClearsBackoffState() async throws {
-        let scheduler = PollSchedulerSpy()
         var now = Date(timeIntervalSince1970: 100)
-        var requestURLs: [String] = []
-        let dependencies = makeDependencies(
-            scheduler: scheduler,
-            resolveUserAgent: { "claude-code/2.1.77" },
-            getCachedOAuthToken: { "token" },
+        let recorder = RequestRecorder()
+        let (service, scheduler) = makeService(
             now: { now },
-            fetchUsage: { request in
-                let path = request.url?.path ?? ""
-                requestURLs.append(path)
-                switch requestURLs.count {
-                case 1:
-                    return (Data(), self.makeResponse(statusCode: 429))
-                case 2:
-                    XCTAssertEqual(path, "/v1/messages")
-                    return (Data(), self.makeResponse(statusCode: 200, url: self.messagesURL))
-                default:
-                    XCTAssertEqual(path, "/api/oauth/usage")
+            cachedToken: { "token" },
+            fetchUsage: oauthSequence(
+                recorder: recorder,
+                oauth: { call, request in
+                    XCTAssertEqual(request.url?.path, "/api/oauth/usage")
+                    if call == 1 {
+                        return (Data(), self.makeResponse(statusCode: 429))
+                    }
                     return (self.makeSuccessPayload(utilization: 37), self.makeResponse(statusCode: 200))
+                },
+                headers: { _, _ in
+                    (Data(), self.makeResponse(statusCode: 200, url: self.messagesURL))
                 }
-            }
+            )
         )
-
-        let service = ClaudeUsageService(dependencies: dependencies)
         service.startPolling()
         await Task.yield()
         await Task.yield()
@@ -416,7 +405,7 @@ final class ClaudeUsageServiceTests: XCTestCase {
         await Task.yield()
         await Task.yield()
 
-        XCTAssertEqual(requestURLs, ["/api/oauth/usage", "/v1/messages", "/api/oauth/usage"])
+        recorder.assertMixed(["/api/oauth/usage", "/v1/messages", "/api/oauth/usage"])
         XCTAssertEqual(service.currentUsage?.usagePercentage, 37)
         XCTAssertNil(service.error)
         XCTAssertNil(service.statusMessage)
@@ -426,69 +415,61 @@ final class ClaudeUsageServiceTests: XCTestCase {
     }
 
     func testSuccessfulHeadersFallbackDefersOAuthProbeForTenMinutes() async throws {
-        let scheduler = PollSchedulerSpy()
         var now = Date(timeIntervalSince1970: 100)
-        var requestURLs: [String] = []
-        var oauthRequests = 0
-        let dependencies = makeDependencies(
-            scheduler: scheduler,
-            resolveUserAgent: { "claude-code/2.1.77" },
-            getCachedOAuthToken: { "token" },
+        let recorder = RequestRecorder()
+        let (service, scheduler) = makeService(
             now: { now },
-            fetchUsage: { request in
-                let path = request.url?.path ?? ""
-                requestURLs.append(path)
-                if path == "/api/oauth/usage" {
-                    oauthRequests += 1
-                    if oauthRequests == 1 {
+            cachedToken: { "token" },
+            fetchUsage: oauthSequence(
+                recorder: recorder,
+                oauth: { call, _ in
+                    if call == 1 {
                         return (Data(), self.makeResponse(statusCode: 429))
                     }
-                    XCTAssertEqual(path, "/api/oauth/usage")
                     return (self.makeSuccessPayload(utilization: 37), self.makeResponse(statusCode: 200))
-                }
-                XCTAssertEqual(path, "/v1/messages")
-                return (
-                    Data(),
-                    self.makeHeadersResponse(
-                        utilization: "0.41",
-                        reset: "2099-01-01T01:00:00Z"
+                },
+                headers: { _, _ in
+                    (
+                        Data(),
+                        self.makeHeadersResponse(
+                            utilization: "0.41",
+                            reset: "2099-01-01T01:00:00Z"
+                        )
                     )
-                )
-            }
+                }
+            )
         )
-
-        let service = ClaudeUsageService(dependencies: dependencies)
         service.startPolling()
         await Task.yield()
         await Task.yield()
 
-        XCTAssertEqual(requestURLs, ["/api/oauth/usage", "/v1/messages"])
+        recorder.assertMixed(["/api/oauth/usage", "/v1/messages"])
         XCTAssertEqual(service.currentUsage?.usagePercentage, 41)
         XCTAssertNil(service.statusMessage)
         XCTAssertFalse(service.isUsageStale)
         XCTAssertEqual(service.recoveryAction, .none)
         XCTAssertEqual(scheduler.intervals, [60])
 
-        requestURLs.removeAll()
+        recorder.reset()
         now = now.addingTimeInterval(60)
         scheduler.fireLast()
         await Task.yield()
         await Task.yield()
 
-        XCTAssertEqual(requestURLs, ["/v1/messages"])
+        recorder.assertHeadersOnly()
         XCTAssertEqual(service.currentUsage?.usagePercentage, 41)
         XCTAssertNil(service.statusMessage)
         XCTAssertFalse(service.isUsageStale)
         XCTAssertEqual(service.recoveryAction, .none)
         XCTAssertEqual(scheduler.intervals, [60, 60])
 
-        requestURLs.removeAll()
+        recorder.reset()
         now = Date(timeIntervalSince1970: 701)
         scheduler.fireLast()
         await Task.yield()
         await Task.yield()
 
-        XCTAssertEqual(requestURLs, ["/api/oauth/usage"])
+        recorder.assertOAuthOnly()
         XCTAssertEqual(service.currentUsage?.usagePercentage, 37)
         XCTAssertNil(service.error)
         XCTAssertNil(service.statusMessage)
@@ -498,21 +479,13 @@ final class ClaudeUsageServiceTests: XCTestCase {
     }
 
     func testRetryDuringSuccessfulHeadersFallbackDoesNotForceOAuthProbe() async throws {
-        let scheduler = PollSchedulerSpy()
         let now = Date(timeIntervalSince1970: 100)
-        var requestURLs: [String] = []
-        let dependencies = makeDependencies(
-            scheduler: scheduler,
-            resolveUserAgent: { "claude-code/2.1.77" },
-            getCachedOAuthToken: { "token" },
+        let recorder = RequestRecorder()
+        let (service, scheduler) = makeService(
             now: { now },
-            fetchUsage: { request in
-                let path = request.url?.path ?? ""
-                requestURLs.append(path)
-                if path == "/api/oauth/usage" {
-                    return (Data(), self.makeResponse(statusCode: 429))
-                }
-                return (
+            cachedToken: { "token" },
+            fetchUsage: oauth429ThenHeaders(recorder: recorder) { _, _ in
+                (
                     Data(),
                     self.makeHeadersResponse(
                         utilization: "0.42",
@@ -521,8 +494,6 @@ final class ClaudeUsageServiceTests: XCTestCase {
                 )
             }
         )
-
-        let service = ClaudeUsageService(dependencies: dependencies)
         service.startPolling()
         await Task.yield()
         await Task.yield()
@@ -531,7 +502,7 @@ final class ClaudeUsageServiceTests: XCTestCase {
         await Task.yield()
         await Task.yield()
 
-        XCTAssertEqual(requestURLs, ["/api/oauth/usage", "/v1/messages"])
+        recorder.assertMixed(["/api/oauth/usage", "/v1/messages"])
         XCTAssertNil(service.statusMessage)
         XCTAssertFalse(service.isUsageStale)
         XCTAssertEqual(service.recoveryAction, .none)
@@ -539,45 +510,32 @@ final class ClaudeUsageServiceTests: XCTestCase {
     }
 
     func testActiveHeadersFallbackRefreshUsesHeadersAndKeepsUsageCurrent() async throws {
-        let scheduler = PollSchedulerSpy()
         var now = Date(timeIntervalSince1970: 100)
-        var requestURLs: [String] = []
-        var headerRefreshes = 0
-        let dependencies = makeDependencies(
-            scheduler: scheduler,
-            resolveUserAgent: { "claude-code/2.1.77" },
-            getCachedOAuthToken: { "token" },
+        let recorder = RequestRecorder()
+        let (service, scheduler) = makeService(
             now: { now },
-            fetchUsage: { request in
-                let path = request.url?.path ?? ""
-                requestURLs.append(path)
-                if path == "/api/oauth/usage" {
-                    return (Data(), self.makeResponse(statusCode: 429))
-                }
-
-                headerRefreshes += 1
-                return (
+            cachedToken: { "token" },
+            fetchUsage: oauth429ThenHeaders(recorder: recorder) { call, _ in
+                (
                     Data(),
                     self.makeHeadersResponse(
-                        utilization: headerRefreshes == 1 ? "0.42" : "0.43",
+                        utilization: call == 1 ? "0.42" : "0.43",
                         reset: "2099-01-01T01:00:00Z"
                     )
                 )
             }
         )
-
-        let service = ClaudeUsageService(dependencies: dependencies)
         service.startPolling()
         await Task.yield()
         await Task.yield()
 
-        requestURLs.removeAll()
+        recorder.reset()
         now = now.addingTimeInterval(60)
         scheduler.fireLast()
         await Task.yield()
         await Task.yield()
 
-        XCTAssertEqual(requestURLs, ["/v1/messages"])
+        recorder.assertHeadersOnly()
         XCTAssertEqual(service.currentUsage?.usagePercentage, 43)
         XCTAssertNil(service.error)
         XCTAssertNil(service.statusMessage)
@@ -587,24 +545,13 @@ final class ClaudeUsageServiceTests: XCTestCase {
     }
 
     func testActiveHeadersFallbackMissKeepsLastGoodUsageVisible() async throws {
-        let scheduler = PollSchedulerSpy()
         var now = Date(timeIntervalSince1970: 100)
-        var requestURLs: [String] = []
-        var headerRefreshes = 0
-        let dependencies = makeDependencies(
-            scheduler: scheduler,
-            resolveUserAgent: { "claude-code/2.1.77" },
-            getCachedOAuthToken: { "token" },
+        let recorder = RequestRecorder()
+        let (service, scheduler) = makeService(
             now: { now },
-            fetchUsage: { request in
-                let path = request.url?.path ?? ""
-                requestURLs.append(path)
-                if path == "/api/oauth/usage" {
-                    return (Data(), self.makeResponse(statusCode: 429))
-                }
-
-                headerRefreshes += 1
-                if headerRefreshes == 1 {
+            cachedToken: { "token" },
+            fetchUsage: oauth429ThenHeaders(recorder: recorder) { call, _ in
+                if call == 1 {
                     return (
                         Data(),
                         self.makeHeadersResponse(
@@ -616,19 +563,17 @@ final class ClaudeUsageServiceTests: XCTestCase {
                 return (Data(), self.makeResponse(statusCode: 200, url: self.messagesURL))
             }
         )
-
-        let service = ClaudeUsageService(dependencies: dependencies)
         service.startPolling()
         await Task.yield()
         await Task.yield()
 
-        requestURLs.removeAll()
+        recorder.reset()
         now = now.addingTimeInterval(60)
         scheduler.fireLast()
         await Task.yield()
         await Task.yield()
 
-        XCTAssertEqual(requestURLs, ["/v1/messages"])
+        recorder.assertHeadersOnly()
         XCTAssertEqual(service.currentUsage?.usagePercentage, 42)
         XCTAssertNil(service.error)
         XCTAssertNil(service.statusMessage)
@@ -638,54 +583,44 @@ final class ClaudeUsageServiceTests: XCTestCase {
     }
 
     func testOAuthProbe429RestartsHeadersFallbackCycleCleanly() async throws {
-        let scheduler = PollSchedulerSpy()
         var now = Date(timeIntervalSince1970: 100)
-        var requestURLs: [String] = []
-        var oauthRequests = 0
-        var headerRefreshes = 0
-        let dependencies = makeDependencies(
-            scheduler: scheduler,
-            resolveUserAgent: { "claude-code/2.1.77" },
-            getCachedOAuthToken: { "token" },
+        let recorder = RequestRecorder()
+        let (service, scheduler) = makeService(
             now: { now },
-            fetchUsage: { request in
-                let path = request.url?.path ?? ""
-                requestURLs.append(path)
-                if path == "/api/oauth/usage" {
-                    oauthRequests += 1
-                    return (Data(), self.makeResponse(statusCode: 429))
-                }
-
-                headerRefreshes += 1
-                return (
-                    Data(),
-                    self.makeHeadersResponse(
-                        utilization: headerRefreshes == 1 ? "0.42" : "0.45",
-                        reset: "2099-01-01T01:00:00Z"
+            cachedToken: { "token" },
+            fetchUsage: oauthSequence(
+                recorder: recorder,
+                oauth: { _, _ in
+                    (Data(), self.makeResponse(statusCode: 429))
+                },
+                headers: { call, _ in
+                    (
+                        Data(),
+                        self.makeHeadersResponse(
+                            utilization: call == 1 ? "0.42" : "0.45",
+                            reset: "2099-01-01T01:00:00Z"
+                        )
                     )
-                )
-            }
+                }
+            )
         )
-
-        let service = ClaudeUsageService(dependencies: dependencies)
         service.startPolling()
         await Task.yield()
         await Task.yield()
 
-        requestURLs.removeAll()
+        recorder.reset()
         now = Date(timeIntervalSince1970: 701)
         scheduler.fireLast()
         await Task.yield()
         await Task.yield()
 
-        XCTAssertEqual(requestURLs, ["/api/oauth/usage", "/v1/messages"])
+        recorder.assertMixed(["/api/oauth/usage", "/v1/messages"])
         XCTAssertEqual(service.currentUsage?.usagePercentage, 45)
         XCTAssertNil(service.error)
         XCTAssertNil(service.statusMessage)
         XCTAssertFalse(service.isUsageStale)
         XCTAssertEqual(service.recoveryAction, .none)
         XCTAssertEqual(scheduler.intervals, [60, 60])
-        XCTAssertEqual(oauthRequests, 2)
     }
 
     func testHeadersFallbackResetsRateLimitCounterBeforeLaterOAuthProbe() async throws {
@@ -1269,6 +1204,72 @@ final class ClaudeUsageServiceTests: XCTestCase {
         )
     }
 
+    private func makeService(
+        now: @escaping () -> Date = { Date() },
+        cachedToken: @escaping () -> String? = { nil },
+        snapshot: @escaping () -> ClaudeUsageRecoverySnapshot? = { nil },
+        fetchUsage: @escaping (URLRequest) async throws -> (Data, URLResponse)
+    ) -> (service: ClaudeUsageService, scheduler: PollSchedulerSpy) {
+        let scheduler = PollSchedulerSpy()
+        let dependencies = makeDependencies(
+            scheduler: scheduler,
+            resolveUserAgent: { "claude-code/2.1.77" },
+            getCachedOAuthToken: cachedToken,
+            loadRecoverySnapshot: snapshot,
+            now: now,
+            fetchUsage: fetchUsage
+        )
+        return (ClaudeUsageService(dependencies: dependencies), scheduler)
+    }
+
+    private func oauthSequence(
+        recorder: RequestRecorder,
+        oauth: @escaping (_ call: Int, _ request: URLRequest) -> (Data, URLResponse),
+        headers: @escaping (_ call: Int, _ request: URLRequest) -> (Data, URLResponse)
+    ) -> (URLRequest) async throws -> (Data, URLResponse) {
+        var oauthCalls = 0
+        var headersCalls = 0
+
+        return { request in
+            let path = recorder.record(request)
+            if path == "/api/oauth/usage" {
+                oauthCalls += 1
+                return oauth(oauthCalls, request)
+            }
+
+            XCTAssertEqual(path, "/v1/messages")
+            headersCalls += 1
+            return headers(headersCalls, request)
+        }
+    }
+
+    private func oauth429ThenHeaders(
+        recorder: RequestRecorder,
+        retryAfter: String? = nil,
+        headers: @escaping (_ call: Int, _ request: URLRequest) -> (Data, URLResponse)
+    ) -> (URLRequest) async throws -> (Data, URLResponse) {
+        oauthSequence(
+            recorder: recorder,
+            oauth: { _, _ in
+                let headersMap = retryAfter.map { ["Retry-After": $0] } ?? [:]
+                return (Data(), self.makeResponse(statusCode: 429, headers: headersMap))
+            },
+            headers: headers
+        )
+    }
+
+    private func oauth403ThenHeaders(
+        recorder: RequestRecorder,
+        oauthResponse: @escaping () -> (Data, URLResponse),
+        headers: @escaping (_ call: Int, _ request: URLRequest) -> (Data, URLResponse)
+    ) -> (URLRequest) async throws -> (Data, URLResponse) {
+        oauthSequence(
+            recorder: recorder,
+            oauth: { _, _ in oauthResponse() },
+            headers: headers
+        )
+    }
+
     private func makeSuccessPayload(utilization: Double) -> Data {
         let json = """
         {
@@ -1284,85 +1285,53 @@ final class ClaudeUsageServiceTests: XCTestCase {
 
     // MARK: - Enterprise Headers Fallback
 
-    func testOAuth403WithExplicitScopeErrorDoesNotFallbackToHeaders() async throws {
-        let scheduler = PollSchedulerSpy()
-        var requestURLs: [String] = []
-        let dependencies = makeDependencies(
-            scheduler: scheduler,
-            resolveUserAgent: { "claude-code/2.1.77" },
-            fetchUsage: { request in
-                let path = request.url?.path ?? ""
-                requestURLs.append(path)
-                return (
-                    self.makeAnthropicErrorPayload(
-                        type: "permission_error",
-                        message: "Claude OAuth token does not meet scope requirement 'user:profile'."
-                    ),
-                    self.makeResponse(statusCode: 403)
-                )
-            }
-        )
+    func testOAuth403ScopeErrorsDoNotFallbackToHeaders() async throws {
+        let cases = [
+            "Claude OAuth token does not meet scope requirement 'user:profile'.",
+            "OAuth token scope is invalid",
+        ]
 
-        let service = ClaudeUsageService(dependencies: dependencies)
-        await service.performFetch(with: "token")
+        for message in cases {
+            let recorder = RequestRecorder()
+            let (service, scheduler) = makeService(
+                fetchUsage: { request in
+                    recorder.record(request)
+                    return (
+                        self.makeAnthropicErrorPayload(
+                            type: "permission_error",
+                            message: message
+                        ),
+                        self.makeResponse(statusCode: 403)
+                    )
+                }
+            )
 
-        XCTAssertEqual(requestURLs, ["/api/oauth/usage"])
-        XCTAssertEqual(service.error, "Claude OAuth permissions missing. Reconnect Claude Code.")
-        XCTAssertEqual(service.recoveryAction, .reconnect)
-        XCTAssertFalse(service.isConnected)
-        XCTAssertTrue(scheduler.intervals.isEmpty)
-    }
+            await service.performFetch(with: "token")
 
-    func testOAuth403WithGenericOAuthScopeErrorDoesNotFallbackToHeaders() async throws {
-        let scheduler = PollSchedulerSpy()
-        var requestURLs: [String] = []
-        let dependencies = makeDependencies(
-            scheduler: scheduler,
-            resolveUserAgent: { "claude-code/2.1.77" },
-            fetchUsage: { request in
-                let path = request.url?.path ?? ""
-                requestURLs.append(path)
-                return (
-                    self.makeAnthropicErrorPayload(
-                        type: "permission_error",
-                        message: "OAuth token scope is invalid"
-                    ),
-                    self.makeResponse(statusCode: 403)
-                )
-            }
-        )
-
-        let service = ClaudeUsageService(dependencies: dependencies)
-        await service.performFetch(with: "token")
-
-        XCTAssertEqual(requestURLs, ["/api/oauth/usage"])
-        XCTAssertEqual(service.error, "Claude OAuth permissions missing. Reconnect Claude Code.")
-        XCTAssertEqual(service.recoveryAction, .reconnect)
+            recorder.assertOAuthOnly()
+            XCTAssertEqual(service.error, "Claude OAuth permissions missing. Reconnect Claude Code.")
+            XCTAssertEqual(service.recoveryAction, .reconnect)
+            XCTAssertFalse(service.isConnected)
+            XCTAssertTrue(scheduler.intervals.isEmpty)
+        }
     }
 
     func testOAuth403TriggersHeadersFallbackAndSucceeds() async throws {
-        let scheduler = PollSchedulerSpy()
-        var requestURLs: [String] = []
-        let dependencies = makeDependencies(
-            scheduler: scheduler,
-            resolveUserAgent: { "claude-code/2.1.77" },
-            fetchUsage: { request in
-                let path = request.url?.path ?? ""
-                requestURLs.append(path)
-                if path == "/api/oauth/usage" {
-                    return (Data(), self.makeResponse(statusCode: 403))
-                }
-                return (Data(), self.makeHeadersResponse(
+        let recorder = RequestRecorder()
+        let (service, scheduler) = makeService(
+            fetchUsage: oauth403ThenHeaders(
+                recorder: recorder,
+                oauthResponse: { (Data(), self.makeResponse(statusCode: 403)) }
+            ) { _, _ in
+                (Data(), self.makeHeadersResponse(
                     utilization: "0.42",
                     reset: "2099-01-01T01:00:00Z"
                 ))
             }
         )
-
-        let service = ClaudeUsageService(dependencies: dependencies)
         await service.performFetch(with: "token")
 
-        XCTAssertEqual(requestURLs, ["/api/oauth/usage", "/v1/messages"])
+        recorder.assertMixed(["/api/oauth/usage", "/v1/messages"])
         XCTAssertEqual(service.currentUsage?.usagePercentage, 42)
         XCTAssertTrue(service.isConnected)
         XCTAssertNil(service.error)
@@ -1398,16 +1367,12 @@ final class ClaudeUsageServiceTests: XCTestCase {
     }
 
     func testOAuth403WithAmbiguousJSONStillFallsBackToHeaders() async throws {
-        let scheduler = PollSchedulerSpy()
-        var requestURLs: [String] = []
-        let dependencies = makeDependencies(
-            scheduler: scheduler,
-            resolveUserAgent: { "claude-code/2.1.77" },
-            fetchUsage: { request in
-                let path = request.url?.path ?? ""
-                requestURLs.append(path)
-                if path == "/api/oauth/usage" {
-                    return (
+        let recorder = RequestRecorder()
+        let (service, _) = makeService(
+            fetchUsage: oauth403ThenHeaders(
+                recorder: recorder,
+                oauthResponse: {
+                    (
                         self.makeAnthropicErrorPayload(
                             type: "permission_error",
                             message: "Your account does not have permission to use this resource."
@@ -1415,32 +1380,27 @@ final class ClaudeUsageServiceTests: XCTestCase {
                         self.makeResponse(statusCode: 403)
                     )
                 }
-                return (Data(), self.makeHeadersResponse(
+            ) { _, _ in
+                (Data(), self.makeHeadersResponse(
                     utilization: "0.42",
                     reset: "2099-01-01T01:00:00Z"
                 ))
             }
         )
-
-        let service = ClaudeUsageService(dependencies: dependencies)
         await service.performFetch(with: "token")
 
-        XCTAssertEqual(requestURLs, ["/api/oauth/usage", "/v1/messages"])
+        recorder.assertMixed(["/api/oauth/usage", "/v1/messages"])
         XCTAssertEqual(service.currentUsage?.usagePercentage, 42)
         XCTAssertEqual(service.recoveryAction, .none)
     }
 
     func testOAuth403WithNonPermissionErrorAndScopeTextStillFallsBackToHeaders() async throws {
-        let scheduler = PollSchedulerSpy()
-        var requestURLs: [String] = []
-        let dependencies = makeDependencies(
-            scheduler: scheduler,
-            resolveUserAgent: { "claude-code/2.1.77" },
-            fetchUsage: { request in
-                let path = request.url?.path ?? ""
-                requestURLs.append(path)
-                if path == "/api/oauth/usage" {
-                    return (
+        let recorder = RequestRecorder()
+        let (service, _) = makeService(
+            fetchUsage: oauth403ThenHeaders(
+                recorder: recorder,
+                oauthResponse: {
+                    (
                         self.makeAnthropicErrorPayload(
                             type: "invalid_request_error",
                             message: "OAuth token scope is invalid"
@@ -1448,44 +1408,36 @@ final class ClaudeUsageServiceTests: XCTestCase {
                         self.makeResponse(statusCode: 403)
                     )
                 }
-                return (Data(), self.makeHeadersResponse(
+            ) { _, _ in
+                (Data(), self.makeHeadersResponse(
                     utilization: "0.42",
                     reset: "2099-01-01T01:00:00Z"
                 ))
             }
         )
-
-        let service = ClaudeUsageService(dependencies: dependencies)
         await service.performFetch(with: "token")
 
-        XCTAssertEqual(requestURLs, ["/api/oauth/usage", "/v1/messages"])
+        recorder.assertMixed(["/api/oauth/usage", "/v1/messages"])
         XCTAssertEqual(service.currentUsage?.usagePercentage, 42)
         XCTAssertEqual(service.recoveryAction, .none)
     }
 
     func testOAuth403WithEmptyBodyStillFallsBackToHeaders() async throws {
-        let scheduler = PollSchedulerSpy()
-        var requestURLs: [String] = []
-        let dependencies = makeDependencies(
-            scheduler: scheduler,
-            resolveUserAgent: { "claude-code/2.1.77" },
-            fetchUsage: { request in
-                let path = request.url?.path ?? ""
-                requestURLs.append(path)
-                if path == "/api/oauth/usage" {
-                    return (Data(), self.makeResponse(statusCode: 403))
-                }
-                return (Data(), self.makeHeadersResponse(
+        let recorder = RequestRecorder()
+        let (service, _) = makeService(
+            fetchUsage: oauth403ThenHeaders(
+                recorder: recorder,
+                oauthResponse: { (Data(), self.makeResponse(statusCode: 403)) }
+            ) { _, _ in
+                (Data(), self.makeHeadersResponse(
                     utilization: "0.42",
                     reset: "2099-01-01T01:00:00Z"
                 ))
             }
         )
-
-        let service = ClaudeUsageService(dependencies: dependencies)
         await service.performFetch(with: "token")
 
-        XCTAssertEqual(requestURLs, ["/api/oauth/usage", "/v1/messages"])
+        recorder.assertMixed(["/api/oauth/usage", "/v1/messages"])
         XCTAssertEqual(service.currentUsage?.usagePercentage, 42)
         XCTAssertEqual(service.recoveryAction, .none)
     }
