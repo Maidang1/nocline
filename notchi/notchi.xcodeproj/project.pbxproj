@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		47C923A02F2CFA1F00EA1E18 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 47C923A12F2CFA1F00EA1E18 /* Sparkle */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		A11A00072F50000000EA1E18 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -15,10 +19,6 @@
 			remoteInfo = notchi;
 		};
 /* End PBXContainerItemProxy section */
-
-/* Begin PBXBuildFile section */
-		47C923A02F2CFA1F00EA1E18 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 47C923A12F2CFA1F00EA1E18 /* Sparkle */; };
-/* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		47C922822F2CFA1F00EA1E18 /* notchi.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = notchi.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -137,10 +137,10 @@
 					47C922812F2CFA1F00EA1E18 = {
 						CreatedOnToolsVersion = 26.0;
 					};
-						A11A00032F50000000EA1E18 = {
-							CreatedOnToolsVersion = 26.0;
-							TestTargetID = 47C922812F2CFA1F00EA1E18;
-						};
+					A11A00032F50000000EA1E18 = {
+						CreatedOnToolsVersion = 26.0;
+						TestTargetID = 47C922812F2CFA1F00EA1E18;
+					};
 				};
 			};
 			buildConfigurationList = 47C9227D2F2CFA1F00EA1E18 /* Build configuration list for PBXProject "notchi" */;

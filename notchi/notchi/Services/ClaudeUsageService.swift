@@ -17,6 +17,8 @@ struct ClaudeUsageServiceDependencies {
     var fetchUsage: (URLRequest) async throws -> (Data, URLResponse)
     var getAccessToken: () -> String?
     var getCachedOAuthToken: () -> String?
+    var getOAuthCredentials: (_ allowInteraction: Bool) -> ClaudeOAuthCredentials?
+    var cacheOAuthToken: (_ token: String) -> Void
     var refreshAccessTokenSilently: () -> String?
     var clearCachedOAuthToken: () -> Void
     var resolveUserAgent: () -> String?
@@ -91,6 +93,12 @@ extension ClaudeUsageServiceDependencies {
         },
         getCachedOAuthToken: {
             KeychainManager.getCachedOAuthToken()
+        },
+        getOAuthCredentials: { allowInteraction in
+            KeychainManager.getOAuthCredentials(allowInteraction: allowInteraction)
+        },
+        cacheOAuthToken: { token in
+            KeychainManager.cacheOAuthToken(token)
         },
         refreshAccessTokenSilently: {
             KeychainManager.refreshAccessTokenSilently()
@@ -173,13 +181,21 @@ final class ClaudeUsageService {
         stopPolling()
 
         Task {
-            guard let accessToken = dependencies.getCachedOAuthToken() else {
+            let accessToken: String
+            if let cachedToken = dependencies.getCachedOAuthToken() {
+                accessToken = cachedToken
+            } else if let credentials = dependencies.getOAuthCredentials(false) {
+                accessToken = credentials.accessToken
+                dependencies.cacheOAuthToken(accessToken)
+                logger.info("Recovered cached OAuth token from Claude Code credentials for background polling")
+            } else {
                 logger.info("No cached token, user must connect manually")
                 isConnected = false
                 AppSettings.isUsageEnabled = false
                 clearTransientState()
                 return
             }
+
             AppSettings.isUsageEnabled = true
             cachedToken = accessToken
             await performFetch(with: accessToken)
@@ -238,6 +254,7 @@ final class ClaudeUsageService {
         case success
         case handled
         case enterprise403
+        case noHeadersFallback
     }
 
     private enum OAuth403Classification {
@@ -260,8 +277,17 @@ final class ClaudeUsageService {
         let message: String?
     }
 
+    private enum PreflightResult {
+        case proceed(String)
+        case handled
+    }
+
     // Internal for unit tests that verify service state transitions directly.
-    func performFetch(with accessToken: String, userInitiated: Bool = false) async {
+    func performFetch(
+        with accessToken: String,
+        userInitiated: Bool = false,
+        allow403EmptyHeadersRecovery: Bool = true
+    ) async {
         if userInitiated { isLoading = true }
 
         defer { if userInitiated { isLoading = false } }
@@ -272,21 +298,48 @@ final class ClaudeUsageService {
             return
         }
 
+        let preflight = await preflightCredentials(for: accessToken, userInitiated: userInitiated)
+        let effectiveAccessToken: String
+        switch preflight {
+        case let .proceed(token):
+            effectiveAccessToken = token
+        case .handled:
+            return
+        }
+
         if preferHeadersFallback {
             oauthRecheckCounter += 1
             if oauthRecheckCounter < Self.oauthRecheckInterval {
-                await fetchViaHeaders(with: accessToken, userAgent: userAgent, userInitiated: userInitiated)
+                _ = await fetchViaHeaders(
+                    with: effectiveAccessToken,
+                    userAgent: userAgent,
+                    userInitiated: userInitiated
+                )
                 return
             }
             oauthRecheckCounter = 0
         }
 
-        let result = await fetchViaOAuth(with: accessToken, userAgent: userAgent, userInitiated: userInitiated)
+        let result = await fetchViaOAuth(with: effectiveAccessToken, userAgent: userAgent, userInitiated: userInitiated)
 
         if case .enterprise403 = result {
             preferHeadersFallback = true
             oauthRecheckCounter = 0
-            await fetchViaHeaders(with: accessToken, userAgent: userAgent, userInitiated: userInitiated)
+            let fallbackResult = await fetchViaHeaders(
+                with: effectiveAccessToken,
+                userAgent: userAgent,
+                userInitiated: userInitiated,
+                allowMissingHeadersRetry: false
+            )
+            if case .noHeadersFallback = fallbackResult {
+                preferHeadersFallback = false
+                if allow403EmptyHeadersRecovery {
+                    await recoverFromEmptyHeadersFallback(afterOAuth403With: effectiveAccessToken, userInitiated: userInitiated)
+                } else {
+                    presentReconnectRequired("Claude authentication needs attention. Reconnect Claude Code.")
+                    stopPolling()
+                }
+            }
         }
     }
 
@@ -389,7 +442,12 @@ final class ClaudeUsageService {
     }
 
     @discardableResult
-    private func fetchViaHeaders(with accessToken: String, userAgent: String, userInitiated: Bool) async -> FetchResult {
+    private func fetchViaHeaders(
+        with accessToken: String,
+        userAgent: String,
+        userInitiated: Bool,
+        allowMissingHeadersRetry: Bool = true
+    ) async -> FetchResult {
         var request = URLRequest(url: Self.messagesURL)
         request.httpMethod = "POST"
         request.timeoutInterval = 30
@@ -427,12 +485,14 @@ final class ClaudeUsageService {
 
             guard let utilization = parseHeaderUtilization(from: httpResponse) else {
                 logger.debug("No unified rate limit headers in response")
-                presentRetryableIssue(
-                    noUsageMessage: "No rate limit headers, retrying in \(Int(pollInterval))s",
-                    staleMessage: "Stale, retrying in \(Int(pollInterval))s"
-                )
-                schedulePollTimer()
-                return .handled
+                if allowMissingHeadersRetry {
+                    presentRetryableIssue(
+                        noUsageMessage: "No rate limit headers, retrying in \(Int(pollInterval))s",
+                        staleMessage: "Stale, retrying in \(Int(pollInterval))s"
+                    )
+                    schedulePollTimer()
+                }
+                return .noHeadersFallback
             }
 
             let resetDate = parseHeaderResetDate(from: httpResponse)
@@ -473,6 +533,83 @@ final class ClaudeUsageService {
         }
 
         presentReconnectRequired("Token expired")
+        stopPolling()
+    }
+
+    private func preflightCredentials(for accessToken: String, userInitiated: Bool) async -> PreflightResult {
+        guard let credentials = dependencies.getOAuthCredentials(userInitiated) else {
+            return .proceed(accessToken)
+        }
+
+        let usesCredentialMetadata: Bool
+        let effectiveAccessToken: String
+
+        if userInitiated {
+            usesCredentialMetadata = true
+            effectiveAccessToken = credentials.accessToken
+            if effectiveAccessToken != accessToken {
+                cachedToken = effectiveAccessToken
+            }
+        } else if credentials.accessToken == accessToken {
+            usesCredentialMetadata = true
+            effectiveAccessToken = accessToken
+        } else {
+            usesCredentialMetadata = false
+            effectiveAccessToken = accessToken
+            logger.info("Silent OAuth credential metadata token mismatch; using cached token")
+        }
+
+        if usesCredentialMetadata,
+           !credentials.scopes.isEmpty,
+           !credentials.scopes.contains("user:profile") {
+            presentReconnectRequired("Claude OAuth permissions missing. Reconnect Claude Code.")
+            stopPolling()
+            return .handled
+        }
+
+        if usesCredentialMetadata,
+           let expiresAt = credentials.expiresAt,
+           expiresAt <= dependencies.now() {
+            logger.info("Local OAuth credential metadata shows expired token before request")
+
+            if let freshToken = dependencies.refreshAccessTokenSilently(),
+               freshToken != effectiveAccessToken {
+                cachedToken = freshToken
+                consecutiveRateLimits = 0
+                logger.info("Token refreshed silently from local credential preflight")
+                await performFetch(
+                    with: freshToken,
+                    userInitiated: userInitiated
+                )
+                return .handled
+            }
+
+            presentReconnectRequired("Token expired")
+            stopPolling()
+            return .handled
+        }
+
+        return .proceed(effectiveAccessToken)
+    }
+
+    private func recoverFromEmptyHeadersFallback(afterOAuth403With currentToken: String, userInitiated: Bool) async {
+        logger.info("OAuth 403 with empty headers fallback triggered silent refresh recovery")
+        cachedToken = nil
+        dependencies.clearCachedOAuthToken()
+
+        if let freshToken = dependencies.refreshAccessTokenSilently(),
+           freshToken != currentToken {
+            cachedToken = freshToken
+            consecutiveRateLimits = 0
+            await performFetch(
+                with: freshToken,
+                userInitiated: userInitiated,
+                allow403EmptyHeadersRecovery: false
+            )
+            return
+        }
+
+        presentReconnectRequired("Claude authentication needs attention. Reconnect Claude Code.")
         stopPolling()
     }
 

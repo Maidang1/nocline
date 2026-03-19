@@ -38,8 +38,18 @@ struct UsageBarView: View {
         }
     }
 
+    var shouldShowConnectPlaceholder: Bool {
+        !isEnabled
+            && usage == nil
+            && !isLoading
+            && error == nil
+            && statusMessage == nil
+            && !isStale
+            && recoveryAction == .none
+    }
+
     var body: some View {
-        if !isEnabled {
+        if shouldShowConnectPlaceholder {
             Button(action: { onConnect?() }) {
                 HStack(spacing: 4) {
                     Image(systemName: "lock.shield")
