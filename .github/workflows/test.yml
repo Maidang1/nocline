@@ -18,25 +18,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Resolve SPM dependencies
-        run: |
-          xcodebuild -resolvePackageDependencies \
-            -project notchi/notchi.xcodeproj \
-            -scheme notchi
-
       - name: Build and test
-        run: |
-          xcodebuild test \
-            -project notchi/notchi.xcodeproj \
-            -scheme notchi \
-            -destination 'platform=macOS' \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            -resultBundlePath $RUNNER_TEMP/TestResults.xcresult
+        run: ./scripts/test.sh all
 
       - name: Upload test result bundle
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: TestResults
-          path: ${{ runner.temp }}/TestResults.xcresult
+          path: build/test/TestResults.xcresult
