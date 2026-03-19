@@ -364,7 +364,9 @@ final class ClaudeUsageService {
     func performFetch(
         with accessToken: String,
         userInitiated: Bool = false,
-        allow403EmptyHeadersRecovery: Bool = true
+        allow403EmptyHeadersRecovery: Bool = true,
+        allowPreflightRefreshRecovery: Bool = true,
+        allow401RefreshRecovery: Bool = true
     ) async {
         if userInitiated { isLoading = true }
 
@@ -376,7 +378,12 @@ final class ClaudeUsageService {
             return
         }
 
-        let preflight = await preflightCredentials(for: accessToken, userInitiated: userInitiated)
+        let preflight = await preflightCredentials(
+            for: accessToken,
+            userInitiated: userInitiated,
+            allowPreflightRefreshRecovery: allowPreflightRefreshRecovery,
+            allow401RefreshRecovery: allow401RefreshRecovery
+        )
         let effectiveAccessToken: String
         switch preflight {
         case let .proceed(token):
@@ -391,14 +398,22 @@ final class ClaudeUsageService {
                 _ = await fetchViaHeaders(
                     with: effectiveAccessToken,
                     userAgent: userAgent,
-                    userInitiated: userInitiated
+                    userInitiated: userInitiated,
+                    allowPreflightRefreshRecovery: allowPreflightRefreshRecovery,
+                    allow401RefreshRecovery: allow401RefreshRecovery
                 )
                 return
             }
             oauthRecheckCounter = 0
         }
 
-        let result = await fetchViaOAuth(with: effectiveAccessToken, userAgent: userAgent, userInitiated: userInitiated)
+        let result = await fetchViaOAuth(
+            with: effectiveAccessToken,
+            userAgent: userAgent,
+            userInitiated: userInitiated,
+            allowPreflightRefreshRecovery: allowPreflightRefreshRecovery,
+            allow401RefreshRecovery: allow401RefreshRecovery
+        )
 
         if case .enterprise403 = result {
             preferHeadersFallback = true
@@ -407,7 +422,9 @@ final class ClaudeUsageService {
                 with: effectiveAccessToken,
                 userAgent: userAgent,
                 userInitiated: userInitiated,
-                allowMissingHeadersRetry: false
+                allowMissingHeadersRetry: false,
+                allowPreflightRefreshRecovery: allowPreflightRefreshRecovery,
+                allow401RefreshRecovery: allow401RefreshRecovery
             )
             if case .noHeadersFallback = fallbackResult {
                 preferHeadersFallback = false
@@ -421,7 +438,13 @@ final class ClaudeUsageService {
         }
     }
 
-    private func fetchViaOAuth(with accessToken: String, userAgent: String, userInitiated: Bool) async -> FetchResult {
+    private func fetchViaOAuth(
+        with accessToken: String,
+        userAgent: String,
+        userInitiated: Bool,
+        allowPreflightRefreshRecovery: Bool,
+        allow401RefreshRecovery: Bool
+    ) async -> FetchResult {
         var request = URLRequest(url: Self.usageURL)
         request.timeoutInterval = 30
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
@@ -479,7 +502,9 @@ final class ClaudeUsageService {
                             userAgent: userAgent,
                             userInitiated: userInitiated,
                             allowMissingHeadersRetry: false,
-                            oauthBackoffDelay: backoffDelay
+                            oauthBackoffDelay: backoffDelay,
+                            allowPreflightRefreshRecovery: allowPreflightRefreshRecovery,
+                            allow401RefreshRecovery: allow401RefreshRecovery
                         )
                         if case .success = fallbackResult {
                             logger.info(
@@ -507,7 +532,12 @@ final class ClaudeUsageService {
                 }
 
                 if httpResponse.statusCode == 401 {
-                    await handleAuthFailure(currentToken: accessToken, userInitiated: userInitiated)
+                    await handleAuthFailure(
+                        currentToken: accessToken,
+                        userInitiated: userInitiated,
+                        allowPreflightRefreshRecovery: allowPreflightRefreshRecovery,
+                        allow401RefreshRecovery: allow401RefreshRecovery
+                    )
                     return .handled
                 }
 
@@ -550,7 +580,9 @@ final class ClaudeUsageService {
         userInitiated: Bool,
         allowMissingHeadersRetry: Bool = true,
         oauthBackoffDelay: TimeInterval? = nil,
-        activeFallbackRefresh: Bool = false
+        activeFallbackRefresh: Bool = false,
+        allowPreflightRefreshRecovery: Bool = true,
+        allow401RefreshRecovery: Bool = true
     ) async -> FetchResult {
         var request = URLRequest(url: Self.messagesURL)
         request.httpMethod = "POST"
@@ -590,7 +622,12 @@ final class ClaudeUsageService {
             }
 
             if httpResponse.statusCode == 401 {
-                await handleAuthFailure(currentToken: accessToken, userInitiated: userInitiated)
+                await handleAuthFailure(
+                    currentToken: accessToken,
+                    userInitiated: userInitiated,
+                    allowPreflightRefreshRecovery: allowPreflightRefreshRecovery,
+                    allow401RefreshRecovery: allow401RefreshRecovery
+                )
                 return .handled
             }
 
@@ -672,19 +709,30 @@ final class ClaudeUsageService {
         )
     }
 
-    private func handleAuthFailure(currentToken: String, userInitiated: Bool) async {
+    private func handleAuthFailure(
+        currentToken: String,
+        userInitiated: Bool,
+        allowPreflightRefreshRecovery: Bool,
+        allow401RefreshRecovery: Bool
+    ) async {
         cachedToken = nil
         clearOAuthBackoffState()
         preferHeadersFallback = false
         oauthRecheckCounter = 0
         dependencies.clearCachedOAuthToken()
 
-        if let freshToken = dependencies.refreshAccessTokenSilently(),
+        if allow401RefreshRecovery,
+           let freshToken = dependencies.refreshAccessTokenSilently(),
            freshToken != currentToken {
             consecutiveRateLimits = 0
             cachedToken = freshToken
             logger.info("Token refreshed silently from Claude Code keychain")
-            await performFetch(with: freshToken, userInitiated: userInitiated)
+            await performFetch(
+                with: freshToken,
+                userInitiated: userInitiated,
+                allowPreflightRefreshRecovery: allowPreflightRefreshRecovery,
+                allow401RefreshRecovery: false
+            )
             return
         }
 
@@ -692,7 +740,12 @@ final class ClaudeUsageService {
         stopPolling()
     }
 
-    private func preflightCredentials(for accessToken: String, userInitiated: Bool) async -> PreflightResult {
+    private func preflightCredentials(
+        for accessToken: String,
+        userInitiated: Bool,
+        allowPreflightRefreshRecovery: Bool,
+        allow401RefreshRecovery: Bool
+    ) async -> PreflightResult {
         guard let credentials = dependencies.getOAuthCredentials(userInitiated) else {
             return .proceed(accessToken)
         }
@@ -728,14 +781,17 @@ final class ClaudeUsageService {
            expiresAt <= dependencies.now() {
             logger.info("Local OAuth credential metadata shows expired token before request")
 
-            if let freshToken = dependencies.refreshAccessTokenSilently(),
+            if allowPreflightRefreshRecovery,
+               let freshToken = dependencies.refreshAccessTokenSilently(),
                freshToken != effectiveAccessToken {
                 cachedToken = freshToken
                 consecutiveRateLimits = 0
                 logger.info("Token refreshed silently from local credential preflight")
                 await performFetch(
                     with: freshToken,
-                    userInitiated: userInitiated
+                    userInitiated: userInitiated,
+                    allowPreflightRefreshRecovery: false,
+                    allow401RefreshRecovery: allow401RefreshRecovery
                 )
                 return .handled
             }
@@ -929,6 +985,7 @@ final class ClaudeUsageService {
 
     private func beginHeadersFallbackProbeWindow() {
         oauthBackoffUntil = nil
+        consecutiveRateLimits = 0
         isHeadersFallbackActive = true
         oauthHeadersFallbackProbeUntil = dependencies.now().addingTimeInterval(Self.headersFallbackOAuthProbeInterval)
         didAttemptHeadersFallbackInOAuthBackoff = false

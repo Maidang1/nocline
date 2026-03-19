@@ -522,6 +522,50 @@ final class ClaudeUsageServiceTests: XCTestCase {
         XCTAssertEqual(oauthRequests, 2)
     }
 
+    func testHeadersFallbackResetsRateLimitCounterBeforeLaterOAuthProbe() async throws {
+        let scheduler = PollSchedulerSpy()
+        var now = Date(timeIntervalSince1970: 100)
+        var requestURLs: [String] = []
+        let dependencies = makeDependencies(
+            scheduler: scheduler,
+            resolveUserAgent: { "claude-code/2.1.77" },
+            getCachedOAuthToken: { "token" },
+            now: { now },
+            fetchUsage: { request in
+                let path = request.url?.path ?? ""
+                requestURLs.append(path)
+                if path == "/api/oauth/usage" {
+                    return (Data(), self.makeResponse(statusCode: 429))
+                }
+                return (
+                    Data(),
+                    self.makeHeadersResponse(
+                        utilization: "0.42",
+                        reset: "2099-01-01T01:00:00Z"
+                    )
+                )
+            }
+        )
+
+        let service = ClaudeUsageService(dependencies: dependencies)
+        service.startPolling()
+        await Task.yield()
+        await Task.yield()
+
+        requestURLs.removeAll()
+        now = Date(timeIntervalSince1970: 701)
+        scheduler.fireLast()
+        await Task.yield()
+        await Task.yield()
+
+        XCTAssertEqual(requestURLs, ["/api/oauth/usage", "/v1/messages"])
+        XCTAssertNil(service.error)
+        XCTAssertNil(service.statusMessage)
+        XCTAssertFalse(service.isUsageStale)
+        XCTAssertEqual(service.recoveryAction, .none)
+        XCTAssertEqual(scheduler.intervals, [60, 60])
+    }
+
     func testMissingClaudeCLIStopsBeforeSendingRequest() async throws {
         let scheduler = PollSchedulerSpy()
         var fetchCalled = false
@@ -769,6 +813,88 @@ final class ClaudeUsageServiceTests: XCTestCase {
         XCTAssertEqual(scheduler.intervals, [60])
     }
 
+    func testLocalPreflightExpiredTokenSameRefreshTokenReconnectsWithoutNetwork() async throws {
+        let scheduler = PollSchedulerSpy()
+        var refreshCalls = 0
+        var fetchCalled = false
+        let expiredDate = Date(timeIntervalSince1970: 10)
+        let now = Date(timeIntervalSince1970: 20)
+        let dependencies = makeDependencies(
+            scheduler: scheduler,
+            resolveUserAgent: { "claude-code/2.1.77" },
+            getOAuthCredentials: { allowInteraction in
+                XCTAssertFalse(allowInteraction)
+                return self.makeCredentials(
+                    accessToken: "cached-token",
+                    expiresAt: expiredDate,
+                    scopes: ["user:profile"]
+                )
+            },
+            refreshAccessTokenSilently: {
+                refreshCalls += 1
+                return "cached-token"
+            },
+            now: { now },
+            fetchUsage: { _ in
+                fetchCalled = true
+                return (self.makeSuccessPayload(utilization: 34), self.makeResponse(statusCode: 200))
+            }
+        )
+
+        let service = ClaudeUsageService(dependencies: dependencies)
+        await service.performFetch(with: "cached-token")
+
+        XCTAssertEqual(refreshCalls, 1)
+        XCTAssertFalse(fetchCalled)
+        XCTAssertNil(service.currentUsage)
+        XCTAssertEqual(service.error, "Token expired")
+        XCTAssertEqual(service.recoveryAction, .reconnect)
+        XCTAssertTrue(scheduler.intervals.isEmpty)
+    }
+
+    func testLocalPreflightExpiredTokenOnlyRefreshesOncePerFetchCycle() async throws {
+        let scheduler = PollSchedulerSpy()
+        var credentialReads = 0
+        var refreshCalls = 0
+        var fetchCalled = false
+        let expiredDate = Date(timeIntervalSince1970: 10)
+        let now = Date(timeIntervalSince1970: 20)
+        let dependencies = makeDependencies(
+            scheduler: scheduler,
+            resolveUserAgent: { "claude-code/2.1.77" },
+            getOAuthCredentials: { allowInteraction in
+                XCTAssertFalse(allowInteraction)
+                credentialReads += 1
+                let token = credentialReads == 1 ? "cached-token" : "fresh-token-1"
+                return self.makeCredentials(
+                    accessToken: token,
+                    expiresAt: expiredDate,
+                    scopes: ["user:profile"]
+                )
+            },
+            refreshAccessTokenSilently: {
+                refreshCalls += 1
+                return refreshCalls == 1 ? "fresh-token-1" : "fresh-token-2"
+            },
+            now: { now },
+            fetchUsage: { _ in
+                fetchCalled = true
+                return (self.makeSuccessPayload(utilization: 34), self.makeResponse(statusCode: 200))
+            }
+        )
+
+        let service = ClaudeUsageService(dependencies: dependencies)
+        await service.performFetch(with: "cached-token")
+
+        XCTAssertEqual(credentialReads, 2)
+        XCTAssertEqual(refreshCalls, 1)
+        XCTAssertFalse(fetchCalled)
+        XCTAssertNil(service.currentUsage)
+        XCTAssertEqual(service.error, "Token expired")
+        XCTAssertEqual(service.recoveryAction, .reconnect)
+        XCTAssertTrue(scheduler.intervals.isEmpty)
+    }
+
     func testManualFetchPrefersInteractiveCredentialsWhenTokenMismatchExists() async throws {
         let scheduler = PollSchedulerSpy()
         var authHeaders: [String] = []
@@ -821,6 +947,74 @@ final class ClaudeUsageServiceTests: XCTestCase {
         XCTAssertEqual(authHeaders, ["Bearer cached-background-token"])
         XCTAssertEqual(service.currentUsage?.usagePercentage, 22)
         XCTAssertEqual(scheduler.intervals, [60])
+    }
+
+    func testOAuth401SameRefreshTokenReconnectsWithoutSecondRetry() async throws {
+        let scheduler = PollSchedulerSpy()
+        var refreshCalls = 0
+        var clearCachedTokenCalls = 0
+        var authHeaders: [String] = []
+        let dependencies = makeDependencies(
+            scheduler: scheduler,
+            resolveUserAgent: { "claude-code/2.1.77" },
+            refreshAccessTokenSilently: {
+                refreshCalls += 1
+                return "old-token"
+            },
+            clearCachedOAuthToken: {
+                clearCachedTokenCalls += 1
+            },
+            fetchUsage: { request in
+                let authHeader = request.value(forHTTPHeaderField: "Authorization") ?? "<missing>"
+                authHeaders.append(authHeader)
+                return (Data(), self.makeResponse(statusCode: 401))
+            }
+        )
+
+        let service = ClaudeUsageService(dependencies: dependencies)
+        await service.performFetch(with: "old-token")
+
+        XCTAssertEqual(refreshCalls, 1)
+        XCTAssertEqual(clearCachedTokenCalls, 1)
+        XCTAssertEqual(authHeaders, ["Bearer old-token"])
+        XCTAssertNil(service.currentUsage)
+        XCTAssertEqual(service.error, "Token expired")
+        XCTAssertEqual(service.recoveryAction, .reconnect)
+        XCTAssertTrue(scheduler.intervals.isEmpty)
+    }
+
+    func testOAuth401OnlyRefreshesOncePerFetchCycle() async throws {
+        let scheduler = PollSchedulerSpy()
+        var refreshCalls = 0
+        var clearCachedTokenCalls = 0
+        var authHeaders: [String] = []
+        let dependencies = makeDependencies(
+            scheduler: scheduler,
+            resolveUserAgent: { "claude-code/2.1.77" },
+            refreshAccessTokenSilently: {
+                refreshCalls += 1
+                return refreshCalls == 1 ? "new-token-1" : "new-token-2"
+            },
+            clearCachedOAuthToken: {
+                clearCachedTokenCalls += 1
+            },
+            fetchUsage: { request in
+                let authHeader = request.value(forHTTPHeaderField: "Authorization") ?? "<missing>"
+                authHeaders.append(authHeader)
+                return (Data(), self.makeResponse(statusCode: 401))
+            }
+        )
+
+        let service = ClaudeUsageService(dependencies: dependencies)
+        await service.performFetch(with: "old-token")
+
+        XCTAssertEqual(refreshCalls, 1)
+        XCTAssertEqual(clearCachedTokenCalls, 2)
+        XCTAssertEqual(authHeaders, ["Bearer old-token", "Bearer new-token-1"])
+        XCTAssertNil(service.currentUsage)
+        XCTAssertEqual(service.error, "Token expired")
+        XCTAssertEqual(service.recoveryAction, .reconnect)
+        XCTAssertTrue(scheduler.intervals.isEmpty)
     }
 
     func testThreeConsecutiveRateLimitsRefreshTokenAndRetry() async throws {
