@@ -30,20 +30,6 @@ final class UsageBarViewTests: XCTestCase {
         XCTAssertFalse(view.shouldShowConnectPlaceholder)
     }
 
-    func testPlaceholderDoesNotHideSuccessfulFallbackUsageState() {
-        let view = UsageBarView(
-            usage: QuotaPeriod(utilization: 42, resetDate: Date(timeIntervalSince1970: 4_102_444_800)),
-            isLoading: false,
-            error: nil,
-            statusMessage: nil,
-            isStale: false,
-            recoveryAction: .none,
-            isEnabled: true
-        )
-
-        XCTAssertFalse(view.shouldShowConnectPlaceholder)
-    }
-
     func testPlaceholderDoesNotHideReconnectState() {
         let view = UsageBarView(
             usage: nil,

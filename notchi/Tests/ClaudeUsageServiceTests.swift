@@ -9,10 +9,16 @@ private struct TestPollTimer: ClaudeUsagePollTimer {
 @MainActor
 private final class PollSchedulerSpy {
     private(set) var intervals: [TimeInterval] = []
+    private var handlers: [() -> Void] = []
 
     func schedule(after interval: TimeInterval, handler: @escaping () -> Void) -> any ClaudeUsagePollTimer {
         intervals.append(interval)
+        handlers.append(handler)
         return TestPollTimer()
+    }
+
+    func fireLast() {
+        handlers.last?()
     }
 }
 
@@ -52,7 +58,7 @@ final class ClaudeUsageServiceTests: XCTestCase {
         XCTAssertEqual(scheduler.intervals, [60])
     }
 
-    func testStartPollingDuringActiveBackoffDoesNotSendOAuthImmediately() async throws {
+    func testStartPollingDuringActiveHeadersFallbackDoesNotSendOAuthImmediately() async throws {
         let scheduler = PollSchedulerSpy()
         let now = Date(timeIntervalSince1970: 100)
         var requestURLs: [String] = []
@@ -83,10 +89,10 @@ final class ClaudeUsageServiceTests: XCTestCase {
 
         XCTAssertTrue(requestURLs.isEmpty)
         XCTAssertEqual(service.currentUsage?.usagePercentage, 46)
-        XCTAssertEqual(service.statusMessage, "Stale, retrying in 120s")
-        XCTAssertTrue(service.isUsageStale)
-        XCTAssertEqual(service.recoveryAction, .retry)
-        XCTAssertEqual(scheduler.intervals, [120, 120])
+        XCTAssertNil(service.statusMessage)
+        XCTAssertFalse(service.isUsageStale)
+        XCTAssertEqual(service.recoveryAction, .none)
+        XCTAssertEqual(scheduler.intervals, [60, 60])
     }
 
     func testRateLimitWithoutCachedUsageShowsRetryState() async throws {
@@ -141,7 +147,7 @@ final class ClaudeUsageServiceTests: XCTestCase {
         XCTAssertEqual(scheduler.intervals, [300])
     }
 
-    func testRateLimitWithCachedUsageKeepsUsageButMarksItStale() async throws {
+    func testRateLimitWithCachedUsageKeepsLastGoodValueCurrentDuringActiveFallback() async throws {
         let scheduler = PollSchedulerSpy()
         var requestURLs: [String] = []
         let dependencies = makeDependencies(
@@ -169,44 +175,10 @@ final class ClaudeUsageServiceTests: XCTestCase {
         XCTAssertEqual(requestURLs, ["/api/oauth/usage", "/api/oauth/usage", "/v1/messages"])
         XCTAssertEqual(service.currentUsage?.usagePercentage, 55)
         XCTAssertNil(service.error)
-        XCTAssertEqual(service.statusMessage, "Stale, retrying in 120s")
-        XCTAssertTrue(service.isUsageStale)
-        XCTAssertEqual(service.recoveryAction, .retry)
-        XCTAssertEqual(scheduler.intervals, [60, 120])
-    }
-
-    func testRateLimitAutomaticallyUsesHeadersFallbackOncePerBackoffWindow() async throws {
-        let scheduler = PollSchedulerSpy()
-        var requestURLs: [String] = []
-        let dependencies = makeDependencies(
-            scheduler: scheduler,
-            resolveUserAgent: { "claude-code/2.1.77" },
-            fetchUsage: { request in
-                let path = request.url?.path ?? ""
-                requestURLs.append(path)
-                if path == "/api/oauth/usage" {
-                    return (Data(), self.makeResponse(statusCode: 429))
-                }
-                return (
-                    Data(),
-                    self.makeHeadersResponse(
-                        utilization: "0.42",
-                        reset: "2099-01-01T01:00:00Z"
-                    )
-                )
-            }
-        )
-
-        let service = ClaudeUsageService(dependencies: dependencies)
-        await service.performFetch(with: "token")
-
-        XCTAssertEqual(requestURLs, ["/api/oauth/usage", "/v1/messages"])
-        XCTAssertEqual(service.currentUsage?.usagePercentage, 42)
-        XCTAssertNil(service.error)
         XCTAssertNil(service.statusMessage)
         XCTAssertFalse(service.isUsageStale)
         XCTAssertEqual(service.recoveryAction, .none)
-        XCTAssertEqual(scheduler.intervals, [600])
+        XCTAssertEqual(scheduler.intervals, [60, 60])
     }
 
     func testManualRetryDuringActiveBackoffDoesNotSendOAuthAgainWhenHeadersAlreadyTried() async throws {
@@ -329,19 +301,24 @@ final class ClaudeUsageServiceTests: XCTestCase {
         XCTAssertNil(service.statusMessage)
         XCTAssertFalse(service.isUsageStale)
         XCTAssertEqual(service.recoveryAction, .none)
-        XCTAssertEqual(scheduler.intervals, [600])
+        XCTAssertEqual(scheduler.intervals, [60])
 
         requestURLs.removeAll()
-        now = now.addingTimeInterval(121)
-        service.startPolling()
+        now = now.addingTimeInterval(60)
+        scheduler.fireLast()
         await Task.yield()
         await Task.yield()
 
-        XCTAssertTrue(requestURLs.isEmpty)
-        XCTAssertEqual(scheduler.intervals, [600, 479])
+        XCTAssertEqual(requestURLs, ["/v1/messages"])
+        XCTAssertEqual(service.currentUsage?.usagePercentage, 41)
+        XCTAssertNil(service.statusMessage)
+        XCTAssertFalse(service.isUsageStale)
+        XCTAssertEqual(service.recoveryAction, .none)
+        XCTAssertEqual(scheduler.intervals, [60, 60])
 
+        requestURLs.removeAll()
         now = Date(timeIntervalSince1970: 701)
-        service.startPolling()
+        scheduler.fireLast()
         await Task.yield()
         await Task.yield()
 
@@ -351,7 +328,7 @@ final class ClaudeUsageServiceTests: XCTestCase {
         XCTAssertNil(service.statusMessage)
         XCTAssertFalse(service.isUsageStale)
         XCTAssertEqual(service.recoveryAction, .none)
-        XCTAssertEqual(scheduler.intervals, [600, 479, 60])
+        XCTAssertEqual(scheduler.intervals, [60, 60, 60])
     }
 
     func testRetryDuringSuccessfulHeadersFallbackDoesNotForceOAuthProbe() async throws {
@@ -392,7 +369,157 @@ final class ClaudeUsageServiceTests: XCTestCase {
         XCTAssertNil(service.statusMessage)
         XCTAssertFalse(service.isUsageStale)
         XCTAssertEqual(service.recoveryAction, .none)
-        XCTAssertEqual(scheduler.intervals, [600, 600])
+        XCTAssertEqual(scheduler.intervals, [60, 60])
+    }
+
+    func testActiveHeadersFallbackRefreshUsesHeadersAndKeepsUsageCurrent() async throws {
+        let scheduler = PollSchedulerSpy()
+        var now = Date(timeIntervalSince1970: 100)
+        var requestURLs: [String] = []
+        var headerRefreshes = 0
+        let dependencies = makeDependencies(
+            scheduler: scheduler,
+            resolveUserAgent: { "claude-code/2.1.77" },
+            getCachedOAuthToken: { "token" },
+            now: { now },
+            fetchUsage: { request in
+                let path = request.url?.path ?? ""
+                requestURLs.append(path)
+                if path == "/api/oauth/usage" {
+                    return (Data(), self.makeResponse(statusCode: 429))
+                }
+
+                headerRefreshes += 1
+                return (
+                    Data(),
+                    self.makeHeadersResponse(
+                        utilization: headerRefreshes == 1 ? "0.42" : "0.43",
+                        reset: "2099-01-01T01:00:00Z"
+                    )
+                )
+            }
+        )
+
+        let service = ClaudeUsageService(dependencies: dependencies)
+        service.startPolling()
+        await Task.yield()
+        await Task.yield()
+
+        requestURLs.removeAll()
+        now = now.addingTimeInterval(60)
+        scheduler.fireLast()
+        await Task.yield()
+        await Task.yield()
+
+        XCTAssertEqual(requestURLs, ["/v1/messages"])
+        XCTAssertEqual(service.currentUsage?.usagePercentage, 43)
+        XCTAssertNil(service.error)
+        XCTAssertNil(service.statusMessage)
+        XCTAssertFalse(service.isUsageStale)
+        XCTAssertEqual(service.recoveryAction, .none)
+        XCTAssertEqual(scheduler.intervals, [60, 60])
+    }
+
+    func testActiveHeadersFallbackMissKeepsLastGoodUsageVisible() async throws {
+        let scheduler = PollSchedulerSpy()
+        var now = Date(timeIntervalSince1970: 100)
+        var requestURLs: [String] = []
+        var headerRefreshes = 0
+        let dependencies = makeDependencies(
+            scheduler: scheduler,
+            resolveUserAgent: { "claude-code/2.1.77" },
+            getCachedOAuthToken: { "token" },
+            now: { now },
+            fetchUsage: { request in
+                let path = request.url?.path ?? ""
+                requestURLs.append(path)
+                if path == "/api/oauth/usage" {
+                    return (Data(), self.makeResponse(statusCode: 429))
+                }
+
+                headerRefreshes += 1
+                if headerRefreshes == 1 {
+                    return (
+                        Data(),
+                        self.makeHeadersResponse(
+                            utilization: "0.42",
+                            reset: "2099-01-01T01:00:00Z"
+                        )
+                    )
+                }
+                return (Data(), self.makeResponse(statusCode: 200, url: self.messagesURL))
+            }
+        )
+
+        let service = ClaudeUsageService(dependencies: dependencies)
+        service.startPolling()
+        await Task.yield()
+        await Task.yield()
+
+        requestURLs.removeAll()
+        now = now.addingTimeInterval(60)
+        scheduler.fireLast()
+        await Task.yield()
+        await Task.yield()
+
+        XCTAssertEqual(requestURLs, ["/v1/messages"])
+        XCTAssertEqual(service.currentUsage?.usagePercentage, 42)
+        XCTAssertNil(service.error)
+        XCTAssertNil(service.statusMessage)
+        XCTAssertFalse(service.isUsageStale)
+        XCTAssertEqual(service.recoveryAction, .none)
+        XCTAssertEqual(scheduler.intervals, [60, 60])
+    }
+
+    func testOAuthProbe429RestartsHeadersFallbackCycleCleanly() async throws {
+        let scheduler = PollSchedulerSpy()
+        var now = Date(timeIntervalSince1970: 100)
+        var requestURLs: [String] = []
+        var oauthRequests = 0
+        var headerRefreshes = 0
+        let dependencies = makeDependencies(
+            scheduler: scheduler,
+            resolveUserAgent: { "claude-code/2.1.77" },
+            getCachedOAuthToken: { "token" },
+            now: { now },
+            fetchUsage: { request in
+                let path = request.url?.path ?? ""
+                requestURLs.append(path)
+                if path == "/api/oauth/usage" {
+                    oauthRequests += 1
+                    return (Data(), self.makeResponse(statusCode: 429))
+                }
+
+                headerRefreshes += 1
+                return (
+                    Data(),
+                    self.makeHeadersResponse(
+                        utilization: headerRefreshes == 1 ? "0.42" : "0.45",
+                        reset: "2099-01-01T01:00:00Z"
+                    )
+                )
+            }
+        )
+
+        let service = ClaudeUsageService(dependencies: dependencies)
+        service.startPolling()
+        await Task.yield()
+        await Task.yield()
+
+        requestURLs.removeAll()
+        now = Date(timeIntervalSince1970: 701)
+        scheduler.fireLast()
+        await Task.yield()
+        await Task.yield()
+
+        XCTAssertEqual(requestURLs, ["/api/oauth/usage", "/v1/messages"])
+        XCTAssertEqual(service.currentUsage?.usagePercentage, 45)
+        XCTAssertNil(service.error)
+        XCTAssertNil(service.statusMessage)
+        XCTAssertFalse(service.isUsageStale)
+        XCTAssertEqual(service.recoveryAction, .none)
+        XCTAssertEqual(scheduler.intervals, [60, 60])
+        XCTAssertEqual(oauthRequests, 2)
     }
 
     func testMissingClaudeCLIStopsBeforeSendingRequest() async throws {

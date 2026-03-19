@@ -141,6 +141,7 @@ final class ClaudeUsageService {
     private static let maxBackoffInterval: TimeInterval = 600
     private static let oauthRecheckInterval = 10
     private static let headersFallbackOAuthProbeInterval: TimeInterval = 600
+    private static let headersFallbackRefreshInterval: TimeInterval = 60
 
     private let dependencies: ClaudeUsageServiceDependencies
     private var resolvedUserAgent: String?
@@ -152,6 +153,7 @@ final class ClaudeUsageService {
     private var oauthRecheckCounter = 0
     private var oauthBackoffUntil: Date?
     private var oauthHeadersFallbackProbeUntil: Date?
+    private var isHeadersFallbackActive = false
     private var didAttemptHeadersFallbackInOAuthBackoff = false
     private var didSucceedWithHeadersFallbackInOAuthBackoff = false
 
@@ -212,8 +214,12 @@ final class ClaudeUsageService {
             AppSettings.isUsageEnabled = true
             cachedToken = accessToken
 
-            if let remainingProbe = activeHeadersFallbackProbeRemaining() {
-                scheduleHeadersFallbackProbeTimer(remaining: remainingProbe)
+            if isHeadersFallbackActive {
+                if let remainingProbe = activeHeadersFallbackProbeRemaining() {
+                    scheduleHeadersFallbackActiveTimer(remainingProbe: remainingProbe)
+                } else {
+                    await performFetch(with: accessToken)
+                }
                 return
             }
 
@@ -232,9 +238,19 @@ final class ClaudeUsageService {
 
     func retryNow() {
         guard !isLoading else { return }
-        if let remainingProbe = activeHeadersFallbackProbeRemaining() {
-            logger.info("Headers fallback is active, deferring OAuth retry until probe window expires")
-            scheduleHeadersFallbackProbeTimer(remaining: remainingProbe)
+        if isHeadersFallbackActive {
+            logger.info("Headers fallback is active, keeping current usage and waiting for the next refresh or OAuth probe")
+            if let remainingProbe = activeHeadersFallbackProbeRemaining() {
+                scheduleHeadersFallbackActiveTimer(remainingProbe: remainingProbe)
+            } else {
+                Task {
+                    guard let accessToken = cachedToken else {
+                        connectAndStartPolling()
+                        return
+                    }
+                    await performFetch(with: accessToken, userInitiated: true)
+                }
+            }
             return
         }
         if let remainingBackoff = activeOAuthBackoffRemaining() {
@@ -282,9 +298,20 @@ final class ClaudeUsageService {
     }
 
     private func fetchUsage() async {
-        if let remainingProbe = activeHeadersFallbackProbeRemaining() {
-            logger.info("Skipping OAuth fetch while headers fallback probe window remains for \(Int(remainingProbe))s")
-            scheduleHeadersFallbackProbeTimer(remaining: remainingProbe)
+        guard let accessToken = cachedToken else {
+            logger.warning("No cached token available, stopping polling")
+            stopPolling()
+            return
+        }
+
+        if isHeadersFallbackActive {
+            if let remainingProbe = activeHeadersFallbackProbeRemaining() {
+                logger.info("Refreshing usage via active headers fallback while OAuth probe is \(Int(remainingProbe))s away")
+                await refreshActiveHeadersFallback(with: accessToken)
+            } else {
+                logger.info("Headers fallback OAuth probe due, retrying OAuth")
+                await performFetch(with: accessToken)
+            }
             return
         }
 
@@ -295,12 +322,6 @@ final class ClaudeUsageService {
                 usingHeadersFallback: didSucceedWithHeadersFallbackInOAuthBackoff
             )
             scheduleBackoffTimer(remaining: remainingBackoff)
-            return
-        }
-
-        guard let accessToken = cachedToken else {
-            logger.warning("No cached token available, stopping polling")
-            stopPolling()
             return
         }
 
@@ -449,10 +470,10 @@ final class ClaudeUsageService {
                     }
 
                     beginOAuthBackoff(delay: backoffDelay)
-                    logger.warning("Rate limited (429), backing off \(Int(backoffDelay))s (attempt \(self.consecutiveRateLimits))")
 
                     if !didAttemptHeadersFallbackInOAuthBackoff {
                         didAttemptHeadersFallbackInOAuthBackoff = true
+                        let hadCurrentUsage = currentUsage != nil
                         let fallbackResult = await fetchViaHeaders(
                             with: accessToken,
                             userAgent: userAgent,
@@ -461,10 +482,21 @@ final class ClaudeUsageService {
                             oauthBackoffDelay: backoffDelay
                         )
                         if case .success = fallbackResult {
+                            logger.info(
+                                "Rate limited (429), using headers fallback with \(Int(Self.headersFallbackRefreshInterval))s refreshes and OAuth re-probe in \(Int(Self.headersFallbackOAuthProbeInterval))s"
+                            )
+                            return .handled
+                        }
+                        if hadCurrentUsage {
+                            clearTransientState()
+                            beginHeadersFallbackProbeWindow()
+                            logger.info("Keeping last good usage visible after OAuth 429 while waiting for refreshed headers")
+                            scheduleHeadersFallbackActiveTimer()
                             return .handled
                         }
                     }
 
+                    logger.warning("Rate limited (429), backing off \(Int(backoffDelay))s (attempt \(self.consecutiveRateLimits))")
                     presentOAuthBackoffState(remaining: backoffDelay, usingHeadersFallback: false)
                     scheduleBackoffTimer(remaining: backoffDelay)
                     return .handled
@@ -479,6 +511,7 @@ final class ClaudeUsageService {
                     return .handled
                 }
 
+                clearOAuthBackoffState()
                 presentRetryableIssue(
                     noUsageMessage: "HTTP \(httpResponse.statusCode), retrying in \(Int(pollInterval))s",
                     staleMessage: "Stale (HTTP \(httpResponse.statusCode)), retrying in \(Int(pollInterval))s"
@@ -516,7 +549,8 @@ final class ClaudeUsageService {
         userAgent: String,
         userInitiated: Bool,
         allowMissingHeadersRetry: Bool = true,
-        oauthBackoffDelay: TimeInterval? = nil
+        oauthBackoffDelay: TimeInterval? = nil,
+        activeFallbackRefresh: Bool = false
     ) async -> FetchResult {
         var request = URLRequest(url: Self.messagesURL)
         request.httpMethod = "POST"
@@ -540,6 +574,9 @@ final class ClaudeUsageService {
             let (_, response) = try await dependencies.fetchUsage(request)
 
             guard let httpResponse = response as? HTTPURLResponse else {
+                if activeFallbackRefresh {
+                    return handleActiveHeadersFallbackMiss(logMessage: "Headers fallback returned invalid response during active fallback refresh")
+                }
                 if oauthBackoffDelay != nil {
                     logger.warning("Headers fallback returned invalid response during OAuth backoff")
                     return .noHeadersFallback
@@ -558,6 +595,9 @@ final class ClaudeUsageService {
             }
 
             guard let utilization = parseHeaderUtilization(from: httpResponse) else {
+                if activeFallbackRefresh {
+                    return handleActiveHeadersFallbackMiss(logMessage: "No unified rate limit headers in active fallback refresh response")
+                }
                 logger.debug("No unified rate limit headers in response")
                 if allowMissingHeadersRetry {
                     presentRetryableIssue(
@@ -574,12 +614,20 @@ final class ClaudeUsageService {
             isConnected = true
             currentUsage = usage
 
+            if activeFallbackRefresh {
+                didSucceedWithHeadersFallbackInOAuthBackoff = true
+                clearTransientState()
+                logger.info("Usage refreshed via active headers fallback: \(usage.usagePercentage)%")
+                scheduleHeadersFallbackActiveTimer()
+                return .success
+            }
+
             if oauthBackoffDelay != nil {
                 didSucceedWithHeadersFallbackInOAuthBackoff = true
                 clearTransientState()
                 beginHeadersFallbackProbeWindow()
                 logger.info("Usage fetched via headers during OAuth backoff: \(usage.usagePercentage)%")
-                scheduleHeadersFallbackProbeTimer(remaining: Self.headersFallbackOAuthProbeInterval)
+                scheduleHeadersFallbackActiveTimer()
                 return .success
             }
 
@@ -591,6 +639,9 @@ final class ClaudeUsageService {
             return .success
 
         } catch {
+            if activeFallbackRefresh {
+                return handleActiveHeadersFallbackMiss(logMessage: "Headers fetch failed during active fallback refresh: \(error.localizedDescription)")
+            }
             if oauthBackoffDelay != nil {
                 logger.error("Headers fetch failed during OAuth backoff: \(error.localizedDescription)")
                 return .noHeadersFallback
@@ -603,6 +654,22 @@ final class ClaudeUsageService {
             schedulePollTimer()
             return .handled
         }
+    }
+
+    private func refreshActiveHeadersFallback(with accessToken: String) async {
+        guard let userAgent = resolveUserAgent() else {
+            presentReconnectRequired("Claude CLI not found")
+            stopPolling()
+            return
+        }
+
+        _ = await fetchViaHeaders(
+            with: accessToken,
+            userAgent: userAgent,
+            userInitiated: false,
+            allowMissingHeadersRetry: false,
+            activeFallbackRefresh: true
+        )
     }
 
     private func handleAuthFailure(currentToken: String, userInitiated: Bool) async {
@@ -822,7 +889,8 @@ final class ClaudeUsageService {
     }
 
     private func activeHeadersFallbackProbeRemaining() -> TimeInterval? {
-        guard let currentProbeUntil = oauthHeadersFallbackProbeUntil else {
+        guard isHeadersFallbackActive,
+              let currentProbeUntil = oauthHeadersFallbackProbeUntil else {
             return nil
         }
 
@@ -830,15 +898,13 @@ final class ClaudeUsageService {
         if remaining > 0 {
             return remaining
         }
-
-        oauthHeadersFallbackProbeUntil = nil
-        didSucceedWithHeadersFallbackInOAuthBackoff = false
         return nil
     }
 
     private func beginOAuthBackoff(delay: TimeInterval) {
         let now = dependencies.now()
         let newBackoffUntil = now.addingTimeInterval(delay)
+        isHeadersFallbackActive = false
         oauthHeadersFallbackProbeUntil = nil
         didSucceedWithHeadersFallbackInOAuthBackoff = false
 
@@ -856,12 +922,14 @@ final class ClaudeUsageService {
     private func clearOAuthBackoffState() {
         oauthBackoffUntil = nil
         oauthHeadersFallbackProbeUntil = nil
+        isHeadersFallbackActive = false
         didAttemptHeadersFallbackInOAuthBackoff = false
         didSucceedWithHeadersFallbackInOAuthBackoff = false
     }
 
     private func beginHeadersFallbackProbeWindow() {
         oauthBackoffUntil = nil
+        isHeadersFallbackActive = true
         oauthHeadersFallbackProbeUntil = dependencies.now().addingTimeInterval(Self.headersFallbackOAuthProbeInterval)
         didAttemptHeadersFallbackInOAuthBackoff = false
         didSucceedWithHeadersFallbackInOAuthBackoff = true
@@ -872,8 +940,15 @@ final class ClaudeUsageService {
         schedulePollTimer(interval: baseInterval, minimumInterval: remaining)
     }
 
-    private func scheduleHeadersFallbackProbeTimer(remaining: TimeInterval) {
-        schedulePollTimer(interval: remaining, minimumInterval: remaining)
+    private func scheduleHeadersFallbackActiveTimer(remainingProbe: TimeInterval? = nil) {
+        let probeRemaining = remainingProbe ?? activeHeadersFallbackProbeRemaining()
+        guard let probeRemaining else {
+            clearOAuthBackoffState()
+            schedulePollTimer()
+            return
+        }
+        let nextInterval = min(Self.headersFallbackRefreshInterval, probeRemaining)
+        schedulePollTimer(interval: nextInterval, minimumInterval: nextInterval)
     }
 
     private func presentOAuthBackoffState(remaining: TimeInterval, usingHeadersFallback: Bool) {
@@ -920,6 +995,25 @@ final class ClaudeUsageService {
             usingHeadersFallback: didSucceedWithHeadersFallbackInOAuthBackoff
         )
         scheduleBackoffTimer(remaining: remaining)
+    }
+
+    private func handleActiveHeadersFallbackMiss(logMessage: String) -> FetchResult {
+        logger.warning("\(logMessage, privacy: .public)")
+
+        guard currentUsage != nil else {
+            clearOAuthBackoffState()
+            presentRetryableIssue(
+                noUsageMessage: "No rate limit headers, retrying in \(Int(pollInterval))s",
+                staleMessage: "Stale, retrying in \(Int(pollInterval))s"
+            )
+            schedulePollTimer()
+            return .handled
+        }
+
+        didSucceedWithHeadersFallbackInOAuthBackoff = true
+        clearTransientState()
+        scheduleHeadersFallbackActiveTimer()
+        return .handled
     }
 
     private func presentRetryableIssue(noUsageMessage: String, staleMessage: String) {
