@@ -1208,7 +1208,7 @@ final class ClaudeUsageService {
             isUsageStale = false
         } else {
             error = nil
-            statusMessage = "Reconnect Claude Code"
+            statusMessage = "Tap to reconnect Claude Code"
             isUsageStale = true
         }
     }

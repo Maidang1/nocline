@@ -12,7 +12,7 @@ struct UsageBarView: View {
     var onConnect: (() -> Void)?
     var onRetry: (() -> Void)?
 
-    private var actionHint: String? {
+    var actionHint: String? {
         switch recoveryAction {
         case .retry:
             return "(tap to retry)"
@@ -46,6 +46,17 @@ struct UsageBarView: View {
             && statusMessage == nil
             && !isStale
             && recoveryAction == .none
+    }
+
+    var shouldAllowTapAction: Bool {
+        switch recoveryAction {
+        case .reconnect:
+            return true
+        case .retry:
+            return usage == nil
+        case .none:
+            return false
+        }
     }
 
     var body: some View {
@@ -121,6 +132,7 @@ struct UsageBarView: View {
         }
         .contentShape(Rectangle())
         .onTapGesture {
+            guard shouldAllowTapAction else { return }
             switch recoveryAction {
             case .retry:
                 onRetry?()
