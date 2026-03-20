@@ -273,6 +273,7 @@ struct ExpandedPanelView: View {
 
 struct PanelHeaderButton: View {
     let sfSymbol: String
+    var showsIndicator: Bool = false
     let action: () -> Void
     @State private var isHovered = false
 
@@ -284,6 +285,14 @@ struct PanelHeaderButton: View {
                 .frame(width: 32, height: 32)
                 .background(isHovered ? TerminalColors.hoverBackground : TerminalColors.subtleBackground)
                 .clipShape(Circle())
+                .overlay(alignment: .topTrailing) {
+                    if showsIndicator {
+                        Circle()
+                            .fill(TerminalColors.red)
+                            .frame(width: 8, height: 8)
+                            .offset(x: -3, y: 3)
+                    }
+                }
         }
         .buttonStyle(.plain)
         .onHover { hovering in

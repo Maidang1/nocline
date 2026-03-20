@@ -223,37 +223,18 @@ struct PanelSettingsView: View {
             }
         case .upToDate:
             statusBadge("Up to date", color: TerminalColors.green)
-        case .found(let version, _):
-            statusBadge("v\(version) available", color: TerminalColors.amber)
-        case .downloading(let progress):
-            HStack(spacing: 4) {
-                ProgressView(value: progress)
-                    .frame(width: 40)
-                Text("\(Int(progress * 100))%")
-                    .font(.system(size: 10))
-                    .foregroundColor(TerminalColors.dimmedText)
-            }
-        case .extracting:
+        case .updateAvailable:
+            statusBadge("Update available", color: TerminalColors.amber)
+        case .downloading:
             HStack(spacing: 4) {
                 ProgressView()
                     .controlSize(.mini)
-                Text("Installing...")
+                Text("Downloading...")
                     .font(.system(size: 10))
                     .foregroundColor(TerminalColors.dimmedText)
             }
-        case .readyToInstall(let version):
-            Button(action: { updateManager.downloadAndInstall() }) {
-                statusBadge("Install v\(version)", color: TerminalColors.green)
-            }
-            .buttonStyle(.plain)
-        case .installing:
-            HStack(spacing: 4) {
-                ProgressView()
-                    .controlSize(.mini)
-                Text("Installing...")
-                    .font(.system(size: 10))
-                    .foregroundColor(TerminalColors.dimmedText)
-            }
+        case .readyToInstall:
+            statusBadge("Ready to install", color: TerminalColors.green)
         case .error(let message):
             statusBadge(message, color: TerminalColors.red)
         case .idle:

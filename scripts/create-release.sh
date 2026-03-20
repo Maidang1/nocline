@@ -76,8 +76,14 @@ fi
 
 DMG_NAME="${APP_NAME}-${VERSION}.dmg"
 DMG_PATH="${BUILD_DIR}/${DMG_NAME}"
+RELEASE_NOTES_SOURCE="docs/release-notes/${VERSION}.md"
+RELEASE_NOTES_ASSET="${BUILD_DIR}/${APP_NAME}-${VERSION}.md"
 
 step "Starting release build for ${APP_NAME} v${VERSION}"
+
+if [[ ! -f "$RELEASE_NOTES_SOURCE" ]]; then
+    fail "Missing release notes file at ${RELEASE_NOTES_SOURCE}"
+fi
 
 # --- Step 2: Clean and archive ---
 step "Step 1/6: Clean and archive (Developer ID distribution)"
@@ -184,6 +190,9 @@ fi
 
 echo "Created ${DMG_PATH}"
 
+cp "$RELEASE_NOTES_SOURCE" "$RELEASE_NOTES_ASSET"
+echo "Prepared release notes asset at ${RELEASE_NOTES_ASSET}"
+
 # --- Step 6: Sign with Sparkle ---
 step "Step 5/6: Sign DMG with Sparkle"
 
@@ -219,6 +228,7 @@ APPCAST_STAGING="${BUILD_DIR}/appcast-staging"
 rm -rf "$APPCAST_STAGING"
 mkdir -p "$APPCAST_STAGING"
 cp "$DMG_PATH" "$APPCAST_STAGING/"
+cp "$RELEASE_NOTES_ASSET" "$APPCAST_STAGING/"
 
 "$GENERATE_APPCAST" \
     --ed-key-file "$SPARKLE_KEY_FILE" \
@@ -235,10 +245,11 @@ step "Release v${VERSION} built successfully!"
 
 echo "Files:"
 echo "  DMG:     ${DMG_PATH}"
+echo "  Notes:   ${RELEASE_NOTES_ASSET}"
 echo "  Appcast: ${APPCAST_OUTPUT}"
 echo ""
 echo "Next steps:"
 echo "  1. Create a GitHub Release tagged v${VERSION}"
-echo "  2. Upload ${DMG_PATH} to the GitHub Release"
+echo "  2. Upload ${DMG_PATH} and ${RELEASE_NOTES_ASSET} to the GitHub Release"
 echo "  3. Commit ${APPCAST_OUTPUT} and push to main"
 echo "  4. Verify the appcast download URL matches your GitHub Release asset URL"
