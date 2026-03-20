@@ -18,6 +18,7 @@ struct NotchContentView: View {
     var stateMachine: NotchiStateMachine = .shared
     var panelManager: NotchPanelManager = .shared
     var usageService: ClaudeUsageService = .shared
+    @ObservedObject private var updateManager = UpdateManager.shared
     @State private var showingPanelSettings = false
     @State private var showingSessionActivity = false
     @State private var isMuted = AppSettings.isMuted
@@ -198,7 +199,11 @@ struct NotchContentView: View {
 
     private var headerButtons: some View {
         HStack(spacing: 8) {
-            PanelHeaderButton(sfSymbol: "gearshape", action: { showingPanelSettings = true })
+            PanelHeaderButton(
+                sfSymbol: "gearshape",
+                showsIndicator: updateManager.hasPendingUpdate,
+                action: { showingPanelSettings = true }
+            )
             PanelHeaderButton(sfSymbol: "xmark", action: { panelManager.collapse() })
         }
         .padding(.trailing, 8)
@@ -247,10 +252,6 @@ struct NotchContentView: View {
             state: topSession?.state ?? .idle,
             isSelected: true
         )
-    }
-
-    private func openSettings() {
-        showingPanelSettings = true
     }
 
     private func toggleMute() {
