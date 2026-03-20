@@ -13,16 +13,7 @@ struct ClaudeUsageRecoverySnapshot: Codable, Equatable {
     let oauthBackoffUntil: Date?
     let oauthHeadersFallbackProbeUntil: Date?
     let isHeadersFallbackActive: Bool
-    let hasUsableHeadersFallbackInOAuthBackoff: Bool
     let lastGoodUsage: QuotaPeriod?
-
-    private enum CodingKeys: String, CodingKey {
-        case oauthBackoffUntil
-        case oauthHeadersFallbackProbeUntil
-        case isHeadersFallbackActive
-        case hasUsableHeadersFallbackInOAuthBackoff = "didSucceedWithHeadersFallbackInOAuthBackoff"
-        case lastGoodUsage
-    }
 }
 
 protocol ClaudeUsagePollTimer {
@@ -167,7 +158,7 @@ final class ClaudeUsageService {
     private static let usageURL = URL(string: "https://api.anthropic.com/api/oauth/usage")!
     private static let messagesURL = URL(string: "https://api.anthropic.com/v1/messages")!
     private static let maxBackoffInterval: TimeInterval = 600
-    private static let oauthRecheckInterval = 10
+    private static let oauthRecheckPollCount = 10
     private static let headersFallbackOAuthProbeInterval: TimeInterval = 600
     private static let headersFallbackRefreshInterval: TimeInterval = 60
 
@@ -183,7 +174,6 @@ final class ClaudeUsageService {
     private var oauthHeadersFallbackProbeUntil: Date?
     private var isHeadersFallbackActive = false
     private var didAttemptHeadersFallbackInOAuthBackoff = false
-    private var hasUsableHeadersFallbackInOAuthBackoff = false
 
     init() {
         self.dependencies = .live
@@ -385,6 +375,13 @@ final class ClaudeUsageService {
         case handled
     }
 
+    private enum HeadersFetchContext {
+        case normalRetrying
+        case normalNoRetry
+        case oauthBackoffEntry
+        case activeFallbackRefresh
+    }
+
     // Internal for unit tests that verify service state transitions directly.
     func performFetch(
         with accessToken: String,
@@ -417,19 +414,14 @@ final class ClaudeUsageService {
             return
         }
 
-        if preferHeadersFallback {
-            oauthRecheckCounter += 1
-            if oauthRecheckCounter < Self.oauthRecheckInterval {
-                _ = await fetchViaHeaders(
-                    with: effectiveAccessToken,
-                    userAgent: userAgent,
-                    userInitiated: userInitiated,
-                    allowPreflightRefreshRecovery: allowPreflightRefreshRecovery,
-                    allow401RefreshRecovery: allow401RefreshRecovery
-                )
-                return
-            }
-            oauthRecheckCounter = 0
+        if await performPreferredEnterpriseHeadersFetchIfNeeded(
+            with: effectiveAccessToken,
+            userAgent: userAgent,
+            userInitiated: userInitiated,
+            allowPreflightRefreshRecovery: allowPreflightRefreshRecovery,
+            allow401RefreshRecovery: allow401RefreshRecovery
+        ) {
+            return
         }
 
         let result = await fetchViaOAuth(
@@ -441,24 +433,70 @@ final class ClaudeUsageService {
         )
 
         if case .enterprise403 = result {
-            preferHeadersFallback = true
-            oauthRecheckCounter = 0
-            let fallbackResult = await fetchViaHeaders(
+            await handleEnterprise403Fallback(
                 with: effectiveAccessToken,
                 userAgent: userAgent,
                 userInitiated: userInitiated,
-                allowMissingHeadersRetry: false,
+                allow403EmptyHeadersRecovery: allow403EmptyHeadersRecovery,
                 allowPreflightRefreshRecovery: allowPreflightRefreshRecovery,
                 allow401RefreshRecovery: allow401RefreshRecovery
             )
-            if case .noHeadersFallback = fallbackResult {
-                preferHeadersFallback = false
-                if allow403EmptyHeadersRecovery {
-                    await recoverFromEmptyHeadersFallback(afterOAuth403With: effectiveAccessToken, userInitiated: userInitiated)
-                } else {
-                    presentReconnectRequired(noUsageMessage: "Claude authentication needs attention. Reconnect Claude Code.")
-                    stopPolling()
-                }
+        }
+    }
+
+    private func performPreferredEnterpriseHeadersFetchIfNeeded(
+        with accessToken: String,
+        userAgent: String,
+        userInitiated: Bool,
+        allowPreflightRefreshRecovery: Bool,
+        allow401RefreshRecovery: Bool
+    ) async -> Bool {
+        guard preferHeadersFallback else {
+            return false
+        }
+
+        oauthRecheckCounter += 1
+        if oauthRecheckCounter >= Self.oauthRecheckPollCount {
+            oauthRecheckCounter = 0
+            return false
+        }
+
+        _ = await fetchViaHeaders(
+            with: accessToken,
+            userAgent: userAgent,
+            userInitiated: userInitiated,
+            context: .normalRetrying,
+            allowPreflightRefreshRecovery: allowPreflightRefreshRecovery,
+            allow401RefreshRecovery: allow401RefreshRecovery
+        )
+        return true
+    }
+
+    private func handleEnterprise403Fallback(
+        with accessToken: String,
+        userAgent: String,
+        userInitiated: Bool,
+        allow403EmptyHeadersRecovery: Bool,
+        allowPreflightRefreshRecovery: Bool,
+        allow401RefreshRecovery: Bool
+    ) async {
+        preferHeadersFallback = true
+        oauthRecheckCounter = 0
+        let fallbackResult = await fetchViaHeaders(
+            with: accessToken,
+            userAgent: userAgent,
+            userInitiated: userInitiated,
+            context: .normalNoRetry,
+            allowPreflightRefreshRecovery: allowPreflightRefreshRecovery,
+            allow401RefreshRecovery: allow401RefreshRecovery
+        )
+        if case .noHeadersFallback = fallbackResult {
+            preferHeadersFallback = false
+            if allow403EmptyHeadersRecovery {
+                await recoverFromEmptyHeadersFallback(afterOAuth403With: accessToken, userInitiated: userInitiated)
+            } else {
+                presentReconnectRequired(noUsageMessage: "Claude authentication needs attention. Reconnect Claude Code.")
+                stopPolling()
             }
         }
     }
@@ -522,8 +560,7 @@ final class ClaudeUsageService {
                             with: accessToken,
                             userAgent: userAgent,
                             userInitiated: userInitiated,
-                            allowMissingHeadersRetry: false,
-                            oauthBackoffDelay: backoffDelay,
+                            context: .oauthBackoffEntry,
                             allowPreflightRefreshRecovery: allowPreflightRefreshRecovery,
                             allow401RefreshRecovery: allow401RefreshRecovery
                         )
@@ -601,9 +638,7 @@ final class ClaudeUsageService {
         with accessToken: String,
         userAgent: String,
         userInitiated: Bool,
-        allowMissingHeadersRetry: Bool = true,
-        oauthBackoffDelay: TimeInterval? = nil,
-        activeFallbackRefresh: Bool = false,
+        context: HeadersFetchContext = .normalRetrying,
         allowPreflightRefreshRecovery: Bool = true,
         allow401RefreshRecovery: Bool = true
     ) async -> FetchResult {
@@ -629,19 +664,20 @@ final class ClaudeUsageService {
             let (_, response) = try await dependencies.fetchUsage(request)
 
             guard let httpResponse = response as? HTTPURLResponse else {
-                if activeFallbackRefresh {
+                switch context {
+                case .activeFallbackRefresh:
                     return handleActiveHeadersFallbackMiss(logMessage: "Headers fallback returned invalid response during active fallback refresh")
-                }
-                if oauthBackoffDelay != nil {
+                case .oauthBackoffEntry:
                     logger.warning("Headers fallback returned invalid response during OAuth backoff")
                     return .noHeadersFallback
+                case .normalRetrying, .normalNoRetry:
+                    presentRetryableIssue(
+                        noUsageMessage: "Invalid response, retrying in \(Int(pollInterval))s",
+                        staleMessage: "Updating soon"
+                    )
+                    schedulePollTimer()
+                    return .handled
                 }
-                presentRetryableIssue(
-                    noUsageMessage: "Invalid response, retrying in \(Int(pollInterval))s",
-                    staleMessage: "Updating soon"
-                )
-                schedulePollTimer()
-                return .handled
             }
 
             if httpResponse.statusCode == 401 {
@@ -655,18 +691,20 @@ final class ClaudeUsageService {
             }
 
             guard let utilization = parseHeaderUtilization(from: httpResponse) else {
-                if activeFallbackRefresh {
-                    return handleActiveHeadersFallbackMiss(logMessage: "No unified rate limit headers in active fallback refresh response")
-                }
                 logger.debug("No unified rate limit headers in response")
-                if allowMissingHeadersRetry {
+                switch context {
+                case .activeFallbackRefresh:
+                    return handleActiveHeadersFallbackMiss(logMessage: "No unified rate limit headers in active fallback refresh response")
+                case .oauthBackoffEntry, .normalNoRetry:
+                    return .noHeadersFallback
+                case .normalRetrying:
                     presentRetryableIssue(
                         noUsageMessage: "No rate limit headers, retrying in \(Int(pollInterval))s",
                         staleMessage: "Updating soon"
                     )
                     schedulePollTimer()
+                    return .noHeadersFallback
                 }
-                return .noHeadersFallback
             }
 
             let resetDate = parseHeaderResetDate(from: httpResponse)
@@ -674,46 +712,44 @@ final class ClaudeUsageService {
             isConnected = true
             currentUsage = usage
 
-            if activeFallbackRefresh {
-                hasUsableHeadersFallbackInOAuthBackoff = true
+            switch context {
+            case .activeFallbackRefresh:
                 clearTransientState()
                 persistRecoverySnapshotIfNeeded()
                 logger.info("Usage refreshed via active headers mode: \(usage.usagePercentage)%")
                 scheduleHeadersFallbackActiveTimer()
                 return .success
-            }
-
-            if oauthBackoffDelay != nil {
-                hasUsableHeadersFallbackInOAuthBackoff = true
+            case .oauthBackoffEntry:
                 clearTransientState()
                 beginHeadersFallbackProbeWindow()
                 logger.info("Usage fetched via headers during OAuth backoff: \(usage.usagePercentage)%")
                 scheduleHeadersFallbackActiveTimer()
                 return .success
+            case .normalRetrying, .normalNoRetry:
+                consecutiveRateLimits = 0
+                clearOAuthBackoffState()
+                clearTransientState()
+                logger.info("Usage fetched via headers: \(usage.usagePercentage)%")
+                schedulePollTimer()
+                return .success
             }
-
-            consecutiveRateLimits = 0
-            clearOAuthBackoffState()
-            clearTransientState()
-            logger.info("Usage fetched via headers: \(usage.usagePercentage)%")
-            schedulePollTimer()
-            return .success
 
         } catch {
-            if activeFallbackRefresh {
+            switch context {
+            case .activeFallbackRefresh:
                 return handleActiveHeadersFallbackMiss(logMessage: "Headers fetch failed during active fallback refresh: \(error.localizedDescription)")
-            }
-            if oauthBackoffDelay != nil {
+            case .oauthBackoffEntry:
                 logger.error("Headers fetch failed during OAuth backoff: \(error.localizedDescription)")
                 return .noHeadersFallback
+            case .normalRetrying, .normalNoRetry:
+                presentRetryableIssue(
+                    noUsageMessage: "Network error, retrying in \(Int(pollInterval))s",
+                    staleMessage: "Updating soon"
+                )
+                logger.error("Headers fetch failed: \(error.localizedDescription)")
+                schedulePollTimer()
+                return .handled
             }
-            presentRetryableIssue(
-                noUsageMessage: "Network error, retrying in \(Int(pollInterval))s",
-                staleMessage: "Updating soon"
-            )
-            logger.error("Headers fetch failed: \(error.localizedDescription)")
-            schedulePollTimer()
-            return .handled
         }
     }
 
@@ -728,8 +764,7 @@ final class ClaudeUsageService {
             with: accessToken,
             userAgent: userAgent,
             userInitiated: false,
-            allowMissingHeadersRetry: false,
-            activeFallbackRefresh: true
+            context: .activeFallbackRefresh
         )
     }
 
@@ -986,8 +1021,6 @@ final class ClaudeUsageService {
         let newBackoffUntil = now.addingTimeInterval(delay)
         isHeadersFallbackActive = false
         oauthHeadersFallbackProbeUntil = nil
-        hasUsableHeadersFallbackInOAuthBackoff = false
-
         if let currentBackoffUntil = oauthBackoffUntil,
            currentBackoffUntil > now {
             oauthBackoffUntil = max(currentBackoffUntil, newBackoffUntil)
@@ -1004,7 +1037,6 @@ final class ClaudeUsageService {
         oauthHeadersFallbackProbeUntil = nil
         isHeadersFallbackActive = false
         didAttemptHeadersFallbackInOAuthBackoff = false
-        hasUsableHeadersFallbackInOAuthBackoff = false
         dependencies.clearRecoverySnapshot()
     }
 
@@ -1014,7 +1046,6 @@ final class ClaudeUsageService {
         isHeadersFallbackActive = true
         oauthHeadersFallbackProbeUntil = dependencies.now().addingTimeInterval(Self.headersFallbackOAuthProbeInterval)
         didAttemptHeadersFallbackInOAuthBackoff = false
-        hasUsableHeadersFallbackInOAuthBackoff = true
         persistRecoverySnapshotIfNeeded()
     }
 
@@ -1063,8 +1094,7 @@ final class ClaudeUsageService {
                 with: accessToken,
                 userAgent: userAgent,
                 userInitiated: true,
-                allowMissingHeadersRetry: false,
-                oauthBackoffDelay: remaining
+                context: .oauthBackoffEntry
             )
             if case .success = fallbackResult {
                 return
@@ -1078,7 +1108,9 @@ final class ClaudeUsageService {
     private func handleActiveHeadersFallbackMiss(logMessage: String) -> FetchResult {
         logger.warning("\(logMessage, privacy: .public)")
 
-        guard currentUsage != nil else {
+        let now = dependencies.now()
+        guard isUsageStillValid(currentUsage, now: now) else {
+            currentUsage = nil
             clearOAuthBackoffState()
             presentRetryableIssue(
                 noUsageMessage: "No rate limit headers, retrying in \(Int(pollInterval))s",
@@ -1088,7 +1120,6 @@ final class ClaudeUsageService {
             return .handled
         }
 
-        hasUsableHeadersFallbackInOAuthBackoff = true
         clearTransientState()
         persistRecoverySnapshotIfNeeded()
         scheduleHeadersFallbackActiveTimer()
@@ -1114,7 +1145,6 @@ final class ClaudeUsageService {
         oauthBackoffUntil = hasActiveOAuthBackoff ? snapshot.oauthBackoffUntil : nil
         oauthHeadersFallbackProbeUntil = hasActiveHeadersFallback ? snapshot.oauthHeadersFallbackProbeUntil : nil
         isHeadersFallbackActive = hasActiveHeadersFallback
-        hasUsableHeadersFallbackInOAuthBackoff = snapshot.hasUsableHeadersFallbackInOAuthBackoff
         didAttemptHeadersFallbackInOAuthBackoff = false
 
         if hasActiveHeadersFallback, currentUsage != nil {
@@ -1145,7 +1175,6 @@ final class ClaudeUsageService {
             oauthBackoffUntil: oauthBackoffUntil,
             oauthHeadersFallbackProbeUntil: oauthHeadersFallbackProbeUntil,
             isHeadersFallbackActive: isHeadersFallbackActive,
-            hasUsableHeadersFallbackInOAuthBackoff: hasUsableHeadersFallbackInOAuthBackoff,
             lastGoodUsage: usageToPersist
         )
     }
