@@ -69,8 +69,7 @@ final class UpdateManager: ObservableObject {
         }
     }
 
-    func downloadStarted(version: String? = nil) {
-        _ = version
+    func downloadStarted() {
         hasPendingUpdate = true
         state = .downloading(progress: 0)
     }

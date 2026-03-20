@@ -14,6 +14,7 @@ SCHEME="notchi"
 PROJECT_PATH="notchi/notchi.xcodeproj"
 APPCAST_OUTPUT="docs/appcast.xml"
 APP_NAME="Notchi"
+WEBSITE_APPCAST_OUTPUT="website/public/appcast.xml"
 
 # TODO: Set your notarytool keychain profile name.
 # Create one with: xcrun notarytool store-credentials "notchi-notarize" --apple-id "you@example.com" --team-id "SXT98GH5HN"
@@ -64,6 +65,23 @@ find_sparkle_bin_dir() {
     echo "$found"
 }
 
+read_build_setting() {
+    local key="$1"
+
+    xcodebuild -showBuildSettings \
+        -project "$PROJECT_PATH" \
+        -scheme "$SCHEME" \
+        2>/dev/null | awk -F' = ' -v key="$key" '$1 ~ key { print $2; exit }'
+}
+
+read_latest_published_build_version() {
+    if [[ ! -f "$APPCAST_OUTPUT" ]]; then
+        return 0
+    fi
+
+    grep -oE '<sparkle:version>[0-9]+' "$APPCAST_OUTPUT" 2>/dev/null | sed 's#<sparkle:version>##' | head -n 1 || true
+}
+
 # --- Step 1: Validate version argument ---
 VERSION="${1:-}"
 if [[ -z "$VERSION" ]]; then
@@ -83,6 +101,41 @@ step "Starting release build for ${APP_NAME} v${VERSION}"
 
 if [[ ! -f "$RELEASE_NOTES_SOURCE" ]]; then
     fail "Missing release notes file at ${RELEASE_NOTES_SOURCE}"
+fi
+
+MARKETING_VERSION="$(read_build_setting "MARKETING_VERSION")"
+BUILD_VERSION="$(read_build_setting "CURRENT_PROJECT_VERSION")"
+
+if [[ -z "$MARKETING_VERSION" ]]; then
+    fail "Could not determine MARKETING_VERSION from ${PROJECT_PATH}"
+fi
+
+if [[ -z "$BUILD_VERSION" ]]; then
+    fail "Could not determine CURRENT_PROJECT_VERSION from ${PROJECT_PATH}"
+fi
+
+if [[ "$MARKETING_VERSION" != "$VERSION" ]]; then
+    fail "Requested version ${VERSION} does not match project MARKETING_VERSION ${MARKETING_VERSION}"
+fi
+
+if ! [[ "$BUILD_VERSION" =~ ^[0-9]+$ ]]; then
+    fail "CURRENT_PROJECT_VERSION must be numeric, got: ${BUILD_VERSION}"
+fi
+
+LAST_PUBLISHED_BUILD="$(read_latest_published_build_version)"
+
+if [[ -n "$LAST_PUBLISHED_BUILD" ]]; then
+    if ! [[ "$LAST_PUBLISHED_BUILD" =~ ^[0-9]+$ ]]; then
+        fail "Latest published sparkle:version must be numeric, got: ${LAST_PUBLISHED_BUILD}"
+    fi
+
+    if (( BUILD_VERSION <= LAST_PUBLISHED_BUILD )); then
+        fail "CURRENT_PROJECT_VERSION ${BUILD_VERSION} must be greater than latest published sparkle:version ${LAST_PUBLISHED_BUILD}"
+    fi
+
+    echo "Validated project version ${MARKETING_VERSION} (build ${BUILD_VERSION}) against published build ${LAST_PUBLISHED_BUILD}"
+else
+    echo "Validated project version ${MARKETING_VERSION} (build ${BUILD_VERSION}) in bootstrap mode with no published appcast item"
 fi
 
 # --- Step 2: Clean and archive ---
@@ -229,6 +282,7 @@ rm -rf "$APPCAST_STAGING"
 mkdir -p "$APPCAST_STAGING"
 cp "$DMG_PATH" "$APPCAST_STAGING/"
 cp "$RELEASE_NOTES_ASSET" "$APPCAST_STAGING/"
+cp "$APPCAST_OUTPUT" "$APPCAST_STAGING/" 2>/dev/null || true
 
 "$GENERATE_APPCAST" \
     --ed-key-file "$SPARKLE_KEY_FILE" \
@@ -238,7 +292,11 @@ cp "$RELEASE_NOTES_ASSET" "$APPCAST_STAGING/"
 
 rm -rf "$APPCAST_STAGING"
 
+mkdir -p "$(dirname "$WEBSITE_APPCAST_OUTPUT")"
+cp "$APPCAST_OUTPUT" "$WEBSITE_APPCAST_OUTPUT"
+
 echo "Appcast written to ${APPCAST_OUTPUT}"
+echo "Website appcast synced to ${WEBSITE_APPCAST_OUTPUT}"
 
 # --- Done ---
 step "Release v${VERSION} built successfully!"
@@ -251,5 +309,5 @@ echo ""
 echo "Next steps:"
 echo "  1. Create a GitHub Release tagged v${VERSION}"
 echo "  2. Upload ${DMG_PATH} and ${RELEASE_NOTES_ASSET} to the GitHub Release"
-echo "  3. Commit ${APPCAST_OUTPUT} and push to main"
+echo "  3. Commit ${APPCAST_OUTPUT} and ${WEBSITE_APPCAST_OUTPUT}, then push to main"
 echo "  4. Verify the appcast download URL matches your GitHub Release asset URL"

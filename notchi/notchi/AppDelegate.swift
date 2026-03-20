@@ -156,7 +156,7 @@ extension AppDelegate {
     }
 
     func updater(_ updater: SPUUpdater, willDownloadUpdate item: SUAppcastItem, with request: NSMutableURLRequest) {
-        UpdateManager.shared.downloadStarted(version: item.displayVersionString)
+        UpdateManager.shared.downloadStarted()
     }
 
     func updater(_ updater: SPUUpdater, didDownloadUpdate item: SUAppcastItem) {
