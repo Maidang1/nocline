@@ -31,8 +31,8 @@ struct HookInstaller {
 
         if let bundled = Bundle.main.url(forResource: "notchi-hook", withExtension: "sh") {
             do {
-                try? FileManager.default.removeItem(at: hookScript)
-                try FileManager.default.copyItem(at: bundled, to: hookScript)
+                let bundledData = try Data(contentsOf: bundled)
+                try bundledData.write(to: hookScript, options: .atomic)
                 try FileManager.default.setAttributes(
                     [.posixPermissions: 0o755],
                     ofItemAtPath: hookScript.path

@@ -1,6 +1,9 @@
 import AppKit
+import os.log
 import Sparkle
 import SwiftUI
+
+private let logger = Logger(subsystem: "com.ruban.notchi", category: "AppDelegate")
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate, SPUStandardUserDriverDelegate {
@@ -20,6 +23,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate, SP
         NSApplication.shared.setActivationPolicy(.accessory)
         setupNotchWindow()
         observeScreenChanges()
+        observeWakeNotifications()
         startHookServices()
         startUsageService()
         startUpdater()
@@ -74,6 +78,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate, SP
         )
     }
 
+    private func observeWakeNotifications() {
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self,
+            selector: #selector(handleSystemWake),
+            name: NSWorkspace.didWakeNotification,
+            object: nil
+        )
+    }
+
     @objc private func repositionWindow() {
         MainActor.assumeIsolated {
             guard let panel = notchPanel else { return }
@@ -82,6 +95,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate, SP
 
             NotchPanelManager.shared.updateGeometry(for: screen)
             panel.setFrame(windowFrame(for: screen), display: true)
+        }
+    }
+
+    @objc private func handleSystemWake() {
+        MainActor.assumeIsolated {
+            logger.info("System woke, restarting Claude usage polling")
+            ClaudeUsageService.shared.startPolling()
         }
     }
 
