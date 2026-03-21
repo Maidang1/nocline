@@ -289,8 +289,8 @@ struct PanelHeaderButton: View {
                     if showsIndicator {
                         Circle()
                             .fill(TerminalColors.red)
-                            .frame(width: 8, height: 8)
-                            .offset(x: -3, y: 3)
+                            .frame(width: 6, height: 6)
+                            .offset(x: -6, y: 6)
                     }
                 }
         }
