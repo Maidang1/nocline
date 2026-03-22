@@ -1,5 +1,8 @@
 # Notchi
 
+> [!IMPORTANT]
+> If you're currently on Notchi `1.0.0`, please install `1.0.1` or later manually from the DMG [here](https://github.com/sk-ruban/notchi/releases/latest). The in-app updater in `1.0.0` is broken for that first upgrade, but should work thereafter.
+
 A macOS notch companion that reacts to Claude Code activity in real-time.
 
 https://github.com/user-attachments/assets/e417bd40-cae8-47c0-998a-905166cf3513
