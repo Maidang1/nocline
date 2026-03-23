@@ -29,7 +29,8 @@ extension NSScreen {
         let leftPadding = auxiliaryTopLeftArea?.width ?? 0
         let rightPadding = auxiliaryTopRightArea?.width ?? 0
         let notchWidth = fullWidth - leftPadding - rightPadding + 4
-        let notchHeight = safeAreaInsets.top
+        let menuBarHeight = frame.maxY - visibleFrame.maxY
+        let notchHeight = max(safeAreaInsets.top, menuBarHeight)
 
         return CGSize(width: notchWidth, height: notchHeight)
     }
@@ -42,7 +43,7 @@ extension NSScreen {
         return CGRect(x: originX, y: originY, width: size.width, height: size.height)
     }
 
-    /// Extracts the exact notch shape from the system's bezel path, normalized to a unit rect.
+    /// Extracts the exact notch shape from the system's bezel path in local notch coordinates.
     /// Returns nil if bezelPath is unavailable or the screen has no notch.
     var notchPath: CGPath? {
         guard hasNotch,

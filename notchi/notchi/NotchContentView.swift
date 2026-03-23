@@ -50,7 +50,7 @@ struct NotchContentView: View {
         isExpanded ? cornerRadiusInsets.opened.bottom : cornerRadiusInsets.closed.bottom
     }
 
-    /// Uses the exact system notch path when collapsed (if available), falls back to parametric NotchShape
+    /// Uses the system notch curve in collapsed mode when available.
     private var notchClipShape: AnyShape {
         if !isExpanded, let systemPath = panelManager.systemNotchPath {
             return AnyShape(SystemNotchShape(cgPath: systemPath))
