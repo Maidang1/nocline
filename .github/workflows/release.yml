@@ -214,8 +214,13 @@ jobs:
           "$SPARKLE_BIN_DIR/generate_appcast" \
             --ed-key-file "$RUNNER_TEMP/sparkle_key" \
             --download-url-prefix "https://github.com/sk-ruban/notchi/releases/download/v$VERSION/" \
+            --release-notes-url-prefix "https://updates.notchi.app/sparkle-notes/" \
             -o docs/appcast.xml \
             $RUNNER_TEMP/appcast_staging
+
+          mkdir -p website/release-notes-signed
+          cp "$RUNNER_TEMP/appcast_staging/Notchi-$VERSION.md" \
+            "website/release-notes-signed/Notchi-$VERSION.md"
 
       - name: Cleanup Sparkle key
         if: always()
@@ -241,6 +246,6 @@ jobs:
           git pull origin main
           cp /tmp/appcast.xml docs/appcast.xml
           cp /tmp/appcast.xml website/public/appcast.xml
-          git add docs/appcast.xml website/public/appcast.xml
+          git add docs/appcast.xml website/public/appcast.xml website/release-notes-signed/Notchi-$VERSION.md
           git diff --cached --quiet && echo "No appcast changes" || git commit -m "chore: update appcast for v$VERSION"
           git push origin main

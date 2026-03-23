@@ -15,6 +15,7 @@ PROJECT_PATH="notchi/notchi.xcodeproj"
 APPCAST_OUTPUT="docs/appcast.xml"
 APP_NAME="Notchi"
 WEBSITE_APPCAST_OUTPUT="website/public/appcast.xml"
+SIGNED_RELEASE_NOTES_DIR="website/release-notes-signed"
 
 # TODO: Set your notarytool keychain profile name.
 # Create one with: xcrun notarytool store-credentials "notchi-notarize" --apple-id "you@example.com" --team-id "SXT98GH5HN"
@@ -287,8 +288,13 @@ cp "$APPCAST_OUTPUT" "$APPCAST_STAGING/" 2>/dev/null || true
 "$GENERATE_APPCAST" \
     --ed-key-file "$SPARKLE_KEY_FILE" \
     --download-url-prefix "https://github.com/sk-ruban/notchi/releases/download/v${VERSION}/" \
+    --release-notes-url-prefix "https://updates.notchi.app/sparkle-notes/" \
     -o "$APPCAST_OUTPUT" \
     "$APPCAST_STAGING"
+
+mkdir -p "$SIGNED_RELEASE_NOTES_DIR"
+cp "$APPCAST_STAGING/${APP_NAME}-${VERSION}.md" \
+    "$SIGNED_RELEASE_NOTES_DIR/${APP_NAME}-${VERSION}.md"
 
 rm -rf "$APPCAST_STAGING"
 
