@@ -12,12 +12,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate, SP
 
     private var updaterStarted = false
     private var temporarilyRegularForUpdateSession = false
-    private lazy var updaterController = SPUStandardUpdaterController(
-        startingUpdater: false,
-        updaterDelegate: self,
-        userDriverDelegate: self
+    private lazy var standardUserDriver = SPUStandardUserDriver(
+        hostBundle: .main,
+        delegate: self
     )
-    private var updater: SPUUpdater { updaterController.updater }
+    private lazy var updateUserDriver = NotchiUpdateUserDriver(
+        standardUserDriver: standardUserDriver,
+        didFinishCustomSession: { [weak self] in
+            UpdateManager.shared.finishUpdateSession()
+            self?.restoreAccessoryModeIfNeeded()
+        }
+    )
+    private lazy var updater = SPUUpdater(
+        hostBundle: .main,
+        applicationBundle: .main,
+        userDriver: updateUserDriver,
+        delegate: self
+    )
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApplication.shared.setActivationPolicy(.accessory)
@@ -123,7 +134,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate, SP
         guard !updaterStarted else { return }
 
         UpdateManager.shared.setUpdater(updater)
-        updaterController.startUpdater()
+        do {
+            try updater.start()
+        } catch {
+            logger.error("Failed to start Sparkle updater: \(error.localizedDescription, privacy: .public)")
+            return
+        }
         updaterStarted = true
     }
 

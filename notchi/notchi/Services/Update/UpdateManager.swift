@@ -82,14 +82,6 @@ final class UpdateManager: ObservableObject {
     func noUpdateFound() {
         clearPendingUpdate(showIdleImmediately: false)
         state = .upToDate
-        resetTask?.cancel()
-        resetTask = Task {
-            try? await Task.sleep(for: .seconds(5))
-            guard !Task.isCancelled else { return }
-            if case .upToDate = state {
-                state = .idle
-            }
-        }
     }
 
     func updateError(_ message: String) {
@@ -100,6 +92,11 @@ final class UpdateManager: ObservableObject {
         if case .checking = state {
             state = .idle
         }
+    }
+
+    func clearInlineNoUpdateStatus() {
+        guard case .upToDate = state else { return }
+        state = .idle
     }
 
     private func clearPendingUpdate(showIdleImmediately: Bool = true) {

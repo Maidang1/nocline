@@ -128,7 +128,7 @@ struct PanelSettingsView: View {
 
     private var actionsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Button(action: { updateManager.checkForUpdates() }) {
+            Button(action: handleUpdatesAction) {
                 SettingsRowView(icon: "arrow.triangle.2.circlepath", title: "Check for Updates") {
                     updateStatusView
                 }
@@ -148,6 +148,10 @@ struct PanelSettingsView: View {
 
     private func openGitHubRepo() {
         NSWorkspace.shared.open(URL(string: "https://github.com/sk-ruban/notchi")!)
+    }
+
+    private func openLatestReleasePage() {
+        NSWorkspace.shared.open(URL(string: "https://github.com/sk-ruban/notchi/releases/latest")!)
     }
 
     private var quitSection: some View {
@@ -187,6 +191,14 @@ struct PanelSettingsView: View {
 
     private func connectUsage() {
         ClaudeUsageService.shared.connectAndStartPolling()
+    }
+
+    private func handleUpdatesAction() {
+        if case .upToDate = updateManager.state {
+            openLatestReleasePage()
+        } else {
+            updateManager.checkForUpdates()
+        }
     }
 
     private func installHooksIfNeeded() {
