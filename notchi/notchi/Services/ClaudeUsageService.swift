@@ -45,6 +45,21 @@ private struct LivePollTimer: ClaudeUsagePollTimer {
     }
 }
 
+private struct AnthropicErrorEnvelope: Decodable {
+    let error: AnthropicErrorDetail?
+    let requestID: String?
+
+    enum CodingKeys: String, CodingKey {
+        case error
+        case requestID = "request_id"
+    }
+}
+
+private struct AnthropicErrorDetail: Decodable {
+    let type: String?
+    let message: String?
+}
+
 private enum ClaudeCLIResolver {
     static func resolveUserAgent() -> String? {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
@@ -353,21 +368,6 @@ final class ClaudeUsageService {
     private enum OAuth403Classification {
         case authScopeFailure(rawMessage: String, errorType: String?, requestID: String?)
         case enterpriseFallback(errorType: String?, requestID: String?)
-    }
-
-    private struct AnthropicErrorEnvelope: Decodable {
-        let error: AnthropicErrorDetail?
-        let requestID: String?
-
-        enum CodingKeys: String, CodingKey {
-            case error
-            case requestID = "request_id"
-        }
-    }
-
-    private struct AnthropicErrorDetail: Decodable {
-        let type: String?
-        let message: String?
     }
 
     private enum PreflightResult {
