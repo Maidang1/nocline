@@ -103,21 +103,34 @@ final class NotchiStateMachine {
                 sessionStore.recordAssistantMessages(result.messages, for: sessionId)
             }
 
-            guard let session = sessionStore.sessions[sessionId] else {
-                pendingSyncTasks.removeValue(forKey: sessionId)
-                return
-            }
-
-            if result.interrupted && session.task == .working {
-                session.updateTask(.idle)
-                session.updateProcessingState(isProcessing: false)
-            } else if session.task == .waiting,
-                      Date().timeIntervalSince(session.lastActivity) > Self.waitingClearGuard {
-                session.clearPendingQuestions()
-                session.updateTask(.working)
-            }
+            reconcileFileSyncResult(
+                result,
+                for: sessionId,
+                hasActiveWatcher: fileWatchers[sessionId] != nil
+            )
 
             pendingSyncTasks.removeValue(forKey: sessionId)
+        }
+    }
+
+    func reconcileFileSyncResult(_ result: ParseResult, for sessionId: String, hasActiveWatcher: Bool) {
+        guard let session = sessionStore.sessions[sessionId] else { return }
+
+        if !result.messages.isEmpty,
+           session.isInteractive,
+           hasActiveWatcher,
+           session.task == .idle || session.task == .sleeping {
+            session.updateTask(.working)
+            session.updateProcessingState(isProcessing: true)
+        }
+
+        if result.interrupted && session.task == .working {
+            session.updateTask(.idle)
+            session.updateProcessingState(isProcessing: false)
+        } else if session.task == .waiting,
+                  Date().timeIntervalSince(session.lastActivity) > Self.waitingClearGuard {
+            session.clearPendingQuestions()
+            session.updateTask(.working)
         }
     }
 

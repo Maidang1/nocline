@@ -145,28 +145,6 @@ final class SocketServer {
         if clientFlags >= 0, fcntl(clientSocket, F_SETFL, clientFlags & ~O_NONBLOCK) != 0 {
             logger.warning("Failed to clear O_NONBLOCK on client socket: \(errno)")
         }
-
-        var nosigpipe: Int32 = 1
-        if setsockopt(
-            clientSocket,
-            SOL_SOCKET,
-            SO_NOSIGPIPE,
-            &nosigpipe,
-            socklen_t(MemoryLayout<Int32>.size)
-        ) != 0 {
-            logger.warning("Failed to set SO_NOSIGPIPE: \(errno)")
-        }
-
-        var timeout = makeTimeval(for: clientReadTimeout)
-        if setsockopt(
-            clientSocket,
-            SOL_SOCKET,
-            SO_RCVTIMEO,
-            &timeout,
-            socklen_t(MemoryLayout<timeval>.size)
-        ) != 0 {
-            logger.warning("Failed to set SO_RCVTIMEO: \(errno)")
-        }
     }
 
     private func handleClient(_ clientSocket: Int32, eventHandler: HookEventHandler?) {
@@ -186,8 +164,20 @@ final class SocketServer {
     private func readClientPayload(from clientSocket: Int32) -> Data? {
         var allData = Data()
         var buffer = [UInt8](repeating: 0, count: 4096)
+        let timeoutMilliseconds = Self.timeoutMilliseconds(for: clientReadTimeout)
 
         while true {
+            switch waitForReadableClientSocket(clientSocket, timeoutMilliseconds: timeoutMilliseconds) {
+            case .ready:
+                break
+            case .timedOut:
+                logger.warning("Dropped idle client connection after read timeout")
+                return nil
+            case .failed(let errorCode):
+                logger.warning("Failed waiting for client socket readability: \(errorCode)")
+                return nil
+            }
+
             let bytesRead = read(clientSocket, &buffer, buffer.count)
 
             if bytesRead > 0 {
@@ -204,21 +194,46 @@ final class SocketServer {
                 continue
             }
 
-            if readError == EAGAIN || readError == EWOULDBLOCK {
-                logger.warning("Dropped idle client connection after read timeout")
-                return nil
-            }
-
             logger.warning("Failed to read client socket: \(readError)")
             return nil
         }
     }
 
-    private func makeTimeval(for timeout: TimeInterval) -> timeval {
+    private func waitForReadableClientSocket(_ clientSocket: Int32, timeoutMilliseconds: Int32) -> SocketReadiness {
+        var descriptor = pollfd(fd: clientSocket, events: Int16(POLLIN), revents: 0)
+
+        while true {
+            let pollResult = poll(&descriptor, 1, timeoutMilliseconds)
+
+            if pollResult > 0 {
+                if descriptor.revents & Int16(POLLNVAL) != 0 {
+                    return .failed(EBADF)
+                }
+
+                if descriptor.revents & Int16(POLLERR) != 0 {
+                    return .failed(EIO)
+                }
+
+                return .ready
+            }
+
+            if pollResult == 0 {
+                return .timedOut
+            }
+
+            let pollError = errno
+            if pollError == EINTR {
+                continue
+            }
+
+            return .failed(pollError)
+        }
+    }
+
+    private static func timeoutMilliseconds(for timeout: TimeInterval) -> Int32 {
         let clampedTimeout = max(timeout, 0)
-        let seconds = floor(clampedTimeout)
-        let microseconds = (clampedTimeout - seconds) * 1_000_000
-        return timeval(tv_sec: Int(seconds), tv_usec: Int32(microseconds.rounded()))
+        let milliseconds = Int((clampedTimeout * 1000).rounded(.up))
+        return Int32(min(milliseconds, Int(Int32.max)))
     }
 
     private func logEvent(_ event: HookEvent) {
@@ -240,4 +255,10 @@ final class SocketServer {
             break
         }
     }
+}
+
+private enum SocketReadiness {
+    case ready
+    case timedOut
+    case failed(Int32)
 }
