@@ -107,6 +107,16 @@ private enum ClaudeCLIResolver {
     }
 }
 
+private enum ClaudeUsageAccessTokenSource {
+    case cached
+    case recoveredFromCredentials
+}
+
+private struct ClaudeUsageAccessTokenResolution {
+    let token: String
+    let source: ClaudeUsageAccessTokenSource
+}
+
 extension ClaudeUsageServiceDependencies {
     static let live = Self(
         fetchUsage: { request in
@@ -195,6 +205,9 @@ final class ClaudeUsageService {
     }
 
     func connectAndStartPolling() {
+        reconnectDiagnostic(
+            "connectAndStartPolling invoked: cachedTokenPresent=\(cachedToken != nil), currentUsagePresent=\(currentUsage != nil), recoveryAction=\(String(describing: recoveryAction))"
+        )
         AppSettings.isUsageEnabled = true
         clearTransientState()
         clearOAuthBackoffState()
@@ -203,21 +216,28 @@ final class ClaudeUsageService {
         stopPolling()
 
         Task {
-            guard let accessToken = resolveStoredAccessToken() else {
+            guard let resolution = resolveStoredAccessToken() else {
                 presentReconnectRequired(noUsageMessage: "Claude authentication needs attention. Reconnect Claude Code.")
                 AppSettings.isUsageEnabled = false
                 return
             }
-            cachedToken = accessToken
-            await performFetch(with: accessToken, userInitiated: true)
+            cachedToken = resolution.token
+            await performFetch(
+                with: resolution.token,
+                userInitiated: true,
+                consultCredentialMetadata: resolution.source == .recoveredFromCredentials
+            )
         }
     }
 
     func startPolling() {
+        reconnectDiagnostic(
+            "startPolling invoked: cachedTokenPresent=\(cachedToken != nil), persistedUsagePresent=\(currentUsage != nil)"
+        )
         stopPolling()
 
         Task {
-            guard let accessToken = resolveStoredAccessToken() else {
+            guard let resolution = resolveStoredAccessToken() else {
                 logger.info("No cached token, user must connect manually")
                 isConnected = false
                 AppSettings.isUsageEnabled = false
@@ -227,7 +247,7 @@ final class ClaudeUsageService {
             }
 
             AppSettings.isUsageEnabled = true
-            cachedToken = accessToken
+            cachedToken = resolution.token
 
             restoreRecoverySnapshotIfNeeded()
 
@@ -235,7 +255,10 @@ final class ClaudeUsageService {
                 if let remainingProbe = activeHeadersFallbackProbeRemaining() {
                     scheduleHeadersFallbackActiveTimer(remainingProbe: remainingProbe)
                 } else {
-                    await performFetch(with: accessToken)
+                    await performFetch(
+                        with: resolution.token,
+                        consultCredentialMetadata: resolution.source == .recoveredFromCredentials
+                    )
                 }
                 return
             }
@@ -246,30 +269,28 @@ final class ClaudeUsageService {
                 return
             }
 
-            await performFetch(with: accessToken)
+            await performFetch(
+                with: resolution.token,
+                consultCredentialMetadata: resolution.source == .recoveredFromCredentials
+            )
         }
     }
 
-    private func resolveStoredAccessToken() -> String? {
-        let silentCredentials = dependencies.getOAuthCredentials(false)
-
+    private func resolveStoredAccessToken() -> ClaudeUsageAccessTokenResolution? {
         if let cachedToken = dependencies.getCachedOAuthToken(false) {
-            if let silentCredentials, silentCredentials.accessToken != cachedToken {
-                let adoptedToken = silentCredentials.accessToken
-                dependencies.cacheOAuthToken(adoptedToken)
-                logger.info("Adopted Claude Code credential token over mismatched cached token")
-                return adoptedToken
-            }
-            return cachedToken
+            reconnectDiagnostic("resolveStoredAccessToken using cached token without consulting Claude credentials")
+            return ClaudeUsageAccessTokenResolution(token: cachedToken, source: .cached)
         }
 
-        if let silentCredentials {
+        if let silentCredentials = dependencies.getOAuthCredentials(false) {
             let recoveredToken = silentCredentials.accessToken
             dependencies.cacheOAuthToken(recoveredToken)
             logger.info("Recovered cached OAuth token from Claude Code credentials")
-            return recoveredToken
+            reconnectDiagnostic("resolveStoredAccessToken recovered token from Claude credentials because cache was empty")
+            return ClaudeUsageAccessTokenResolution(token: recoveredToken, source: .recoveredFromCredentials)
         }
 
+        reconnectDiagnostic("resolveStoredAccessToken found no cached token and no Claude credentials")
         return nil
     }
 
@@ -285,7 +306,11 @@ final class ClaudeUsageService {
                         connectAndStartPolling()
                         return
                     }
-                    await performFetch(with: accessToken, userInitiated: true)
+                    await performFetch(
+                        with: accessToken,
+                        userInitiated: true,
+                        consultCredentialMetadata: false
+                    )
                 }
             }
             return
@@ -312,7 +337,11 @@ final class ClaudeUsageService {
                 connectAndStartPolling()
                 return
             }
-            await performFetch(with: accessToken, userInitiated: true)
+            await performFetch(
+                with: accessToken,
+                userInitiated: true,
+                consultCredentialMetadata: false
+            )
         }
     }
 
@@ -347,7 +376,7 @@ final class ClaudeUsageService {
                 await refreshActiveHeadersFallback(with: accessToken)
             } else {
                 logger.info("Headers refresh window reached OAuth re-probe deadline")
-                await performFetch(with: accessToken)
+                await performFetch(with: accessToken, consultCredentialMetadata: false)
             }
             return
         }
@@ -359,7 +388,7 @@ final class ClaudeUsageService {
             return
         }
 
-        await performFetch(with: accessToken)
+        await performFetch(with: accessToken, consultCredentialMetadata: false)
     }
 
     private enum FetchResult {
@@ -390,6 +419,7 @@ final class ClaudeUsageService {
     func performFetch(
         with accessToken: String,
         userInitiated: Bool = false,
+        consultCredentialMetadata: Bool = true,
         allow403EmptyHeadersRecovery: Bool = true,
         allowPreflightRefreshRecovery: Bool = true,
         allow401RefreshRecovery: Bool = true
@@ -404,18 +434,26 @@ final class ClaudeUsageService {
             return
         }
 
-        let preflight = await preflightCredentials(
-            for: accessToken,
-            userInitiated: userInitiated,
-            allowPreflightRefreshRecovery: allowPreflightRefreshRecovery,
-            allow401RefreshRecovery: allow401RefreshRecovery
+        reconnectDiagnostic(
+            "performFetch starting: userInitiated=\(userInitiated), consultCredentialMetadata=\(consultCredentialMetadata), allow401RefreshRecovery=\(allow401RefreshRecovery), allowPreflightRefreshRecovery=\(allowPreflightRefreshRecovery)"
         )
+
         let effectiveAccessToken: String
-        switch preflight {
-        case let .proceed(token):
-            effectiveAccessToken = token
-        case .handled:
-            return
+        if consultCredentialMetadata {
+            let preflight = await preflightCredentials(
+                for: accessToken,
+                userInitiated: userInitiated,
+                allowPreflightRefreshRecovery: allowPreflightRefreshRecovery,
+                allow401RefreshRecovery: allow401RefreshRecovery
+            )
+            switch preflight {
+            case let .proceed(token):
+                effectiveAccessToken = token
+            case .handled:
+                return
+            }
+        } else {
+            effectiveAccessToken = accessToken
         }
 
         if await performPreferredEnterpriseHeadersFetchIfNeeded(
@@ -543,7 +581,11 @@ final class ClaudeUsageService {
                         cachedToken = freshToken
                         consecutiveRateLimits = 0
                         logger.info("Token refreshed after persistent 429s")
-                        await performFetch(with: freshToken, userInitiated: userInitiated)
+                        await performFetch(
+                            with: freshToken,
+                            userInitiated: userInitiated,
+                            consultCredentialMetadata: false
+                        )
                         return .handled
                     }
 
@@ -778,6 +820,9 @@ final class ClaudeUsageService {
         allowPreflightRefreshRecovery: Bool,
         allow401RefreshRecovery: Bool
     ) async {
+        reconnectDiagnostic(
+            "handleAuthFailure entered after 401: userInitiated=\(userInitiated), allow401RefreshRecovery=\(allow401RefreshRecovery)"
+        )
         cachedToken = nil
         clearOAuthBackoffState()
         preferHeadersFallback = false
@@ -790,9 +835,11 @@ final class ClaudeUsageService {
             consecutiveRateLimits = 0
             cachedToken = freshToken
             logger.info("Token refreshed silently from Claude Code keychain")
+            reconnectDiagnostic("handleAuthFailure recovered with a silent Claude credential refresh")
             await performFetch(
                 with: freshToken,
                 userInitiated: userInitiated,
+                consultCredentialMetadata: false,
                 allowPreflightRefreshRecovery: allowPreflightRefreshRecovery,
                 allow401RefreshRecovery: false
             )
@@ -810,6 +857,7 @@ final class ClaudeUsageService {
         allow401RefreshRecovery: Bool
     ) async -> PreflightResult {
         guard let credentials = dependencies.getOAuthCredentials(false) else {
+            reconnectDiagnostic("preflightCredentials found no Claude credential metadata")
             return .proceed(accessToken)
         }
 
@@ -829,11 +877,17 @@ final class ClaudeUsageService {
             usesCredentialMetadata = false
             effectiveAccessToken = accessToken
             logger.info("Silent OAuth credential metadata token mismatch; using cached token")
+            reconnectDiagnostic("preflightCredentials ignored mismatched Claude credential metadata and kept cached token")
         }
+
+        reconnectDiagnostic(
+            "preflightCredentials loaded Claude credential metadata: usesCredentialMetadata=\(usesCredentialMetadata), hasExpiry=\(credentials.expiresAt != nil), scopeCount=\(credentials.scopes.count)"
+        )
 
         if usesCredentialMetadata,
            !credentials.scopes.isEmpty,
            !credentials.scopes.contains("user:profile") {
+            reconnectDiagnostic("preflightCredentials is forcing reconnect because Claude credential scopes are missing user:profile")
             presentReconnectRequired(noUsageMessage: "Claude OAuth permissions missing. Reconnect Claude Code.")
             stopPolling()
             return .handled
@@ -843,6 +897,7 @@ final class ClaudeUsageService {
            let expiresAt = credentials.expiresAt,
            expiresAt <= dependencies.now() {
             logger.info("Local OAuth credential metadata shows expired token before request")
+            reconnectDiagnostic("preflightCredentials saw expired Claude credential metadata before the request")
 
             if allowPreflightRefreshRecovery,
                let freshToken = dependencies.refreshAccessTokenSilently(),
@@ -850,9 +905,11 @@ final class ClaudeUsageService {
                 cachedToken = freshToken
                 consecutiveRateLimits = 0
                 logger.info("Token refreshed silently from local credential preflight")
+                reconnectDiagnostic("preflightCredentials recovered with a silent Claude credential refresh")
                 await performFetch(
                     with: freshToken,
                     userInitiated: userInitiated,
+                    consultCredentialMetadata: false,
                     allowPreflightRefreshRecovery: false,
                     allow401RefreshRecovery: allow401RefreshRecovery
                 )
@@ -880,6 +937,7 @@ final class ClaudeUsageService {
             await performFetch(
                 with: freshToken,
                 userInitiated: userInitiated,
+                consultCredentialMetadata: false,
                 allow403EmptyHeadersRecovery: false
             )
             return
@@ -1203,7 +1261,14 @@ final class ClaudeUsageService {
         }
     }
 
+    private func reconnectDiagnostic(_ message: String) {
+        logger.info("[TEMP reconnect diagnostics] \(message, privacy: .public)")
+    }
+
     private func presentReconnectRequired(noUsageMessage: String) {
+        reconnectDiagnostic(
+            "presentReconnectRequired: noUsageMessage=\(noUsageMessage), currentUsagePresent=\(currentUsage != nil), statusMessageWillBecomeTapHint=\(currentUsage != nil)"
+        )
         recoveryAction = .reconnect
         isConnected = false
         if currentUsage == nil {
