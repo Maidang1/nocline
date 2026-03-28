@@ -216,10 +216,13 @@ struct PanelSettingsView: View {
         Text(text)
             .font(.system(size: 10, weight: .medium))
             .foregroundColor(color)
+            .lineLimit(1)
+            .truncationMode(.tail)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
             .background(color.opacity(0.15))
             .cornerRadius(4)
+            .frame(maxWidth: 160, alignment: .trailing)
     }
 
     @ViewBuilder
@@ -247,8 +250,8 @@ struct PanelSettingsView: View {
             }
         case .readyToInstall:
             statusBadge("Ready to install", color: TerminalColors.green)
-        case .error(let message):
-            statusBadge(message, color: TerminalColors.red)
+        case .error(let failure):
+            statusBadge(failure.label, color: TerminalColors.red)
         case .idle:
             Text("v\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0")")
                 .font(.system(size: 10))

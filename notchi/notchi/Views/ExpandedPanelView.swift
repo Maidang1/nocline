@@ -82,7 +82,7 @@ struct ExpandedPanelView: View {
         .animation(.easeInOut(duration: 0.25), value: shouldShowSessionPicker)
         .onChange(of: showingSettings) { _, isShowing in
             if !isShowing {
-                UpdateManager.shared.clearInlineNoUpdateStatus()
+                UpdateManager.shared.clearTransientStatus()
             }
         }
     }
