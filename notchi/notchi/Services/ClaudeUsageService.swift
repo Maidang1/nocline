@@ -22,6 +22,7 @@ protocol ClaudeUsagePollTimer {
 
 struct ClaudeUsageServiceDependencies {
     var fetchUsage: (URLRequest) async throws -> (Data, URLResponse)
+    var getOAuthTokenFromEnvironment: () -> String?
     var getCachedOAuthToken: (_ allowInteraction: Bool) -> String?
     var getOAuthCredentials: (_ allowInteraction: Bool) -> ClaudeOAuthCredentials?
     var cacheOAuthToken: (_ token: String) -> Void
@@ -108,6 +109,7 @@ private enum ClaudeCLIResolver {
 }
 
 private enum ClaudeUsageAccessTokenSource {
+    case environment
     case cached
     case recoveredFromCredentials
 }
@@ -121,6 +123,14 @@ extension ClaudeUsageServiceDependencies {
     static let live = Self(
         fetchUsage: { request in
             try await URLSession.shared.data(for: request)
+        },
+        getOAuthTokenFromEnvironment: {
+            let rawToken = ProcessInfo.processInfo.environment["CLAUDE_CODE_OAUTH_TOKEN"]?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let rawToken, !rawToken.isEmpty else {
+                return nil
+            }
+            return rawToken
         },
         getCachedOAuthToken: { allowInteraction in
             KeychainManager.getCachedOAuthToken(allowInteraction: allowInteraction)
@@ -216,7 +226,7 @@ final class ClaudeUsageService {
         stopPolling()
 
         Task {
-            guard let resolution = resolveStoredAccessToken() else {
+            guard let resolution = resolveStoredAccessToken(allowsCredentialRecovery: true) else {
                 presentReconnectRequired(noUsageMessage: "Claude authentication needs attention. Reconnect Claude Code.")
                 AppSettings.isUsageEnabled = false
                 return
@@ -230,19 +240,32 @@ final class ClaudeUsageService {
         }
     }
 
-    func startPolling() {
+    func startPolling(afterSystemWake: Bool = false) {
         reconnectDiagnostic(
-            "startPolling invoked: cachedTokenPresent=\(cachedToken != nil), persistedUsagePresent=\(currentUsage != nil)"
+            "startPolling invoked: cachedTokenPresent=\(cachedToken != nil), persistedUsagePresent=\(currentUsage != nil), afterSystemWake=\(afterSystemWake)"
         )
         stopPolling()
 
         Task {
-            guard let resolution = resolveStoredAccessToken() else {
+            if afterSystemWake,
+               isHeadersFallbackActive,
+               let accessToken = cachedToken {
+                resetHeadersFallbackProbeWindowFromWake()
+                logger.info("System woke during active headers refresh mode; deferring OAuth re-probe for another \(Int(Self.headersFallbackOAuthProbeInterval))s")
+                await refreshActiveHeadersFallback(with: accessToken)
+                return
+            }
+
+            guard let resolution = resolveStoredAccessToken(allowsCredentialRecovery: false) else {
                 logger.info("No cached token, user must connect manually")
                 isConnected = false
                 AppSettings.isUsageEnabled = false
                 clearOAuthBackoffState()
-                clearTransientState()
+                if currentUsage != nil {
+                    presentReconnectRequired(noUsageMessage: "Claude authentication needs attention. Reconnect Claude Code.")
+                } else {
+                    clearTransientState()
+                }
                 return
             }
 
@@ -276,10 +299,22 @@ final class ClaudeUsageService {
         }
     }
 
-    private func resolveStoredAccessToken() -> ClaudeUsageAccessTokenResolution? {
+    private func resolveStoredAccessToken(allowsCredentialRecovery: Bool) -> ClaudeUsageAccessTokenResolution? {
+        if let environmentToken = dependencies.getOAuthTokenFromEnvironment()?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           !environmentToken.isEmpty {
+            reconnectDiagnostic("resolveStoredAccessToken using CLAUDE_CODE_OAUTH_TOKEN from environment")
+            return ClaudeUsageAccessTokenResolution(token: environmentToken, source: .environment)
+        }
+
         if let cachedToken = dependencies.getCachedOAuthToken(false) {
             reconnectDiagnostic("resolveStoredAccessToken using cached token without consulting Claude credentials")
             return ClaudeUsageAccessTokenResolution(token: cachedToken, source: .cached)
+        }
+
+        guard allowsCredentialRecovery else {
+            reconnectDiagnostic("resolveStoredAccessToken found no environment token or cached token; skipping Claude credentials in background")
+            return nil
         }
 
         if let silentCredentials = dependencies.getOAuthCredentials(false) {
@@ -829,21 +864,8 @@ final class ClaudeUsageService {
         oauthRecheckCounter = 0
         dependencies.clearCachedOAuthToken()
 
-        if allow401RefreshRecovery,
-           let freshToken = dependencies.refreshAccessTokenSilently(),
-           freshToken != currentToken {
-            consecutiveRateLimits = 0
-            cachedToken = freshToken
-            logger.info("Token refreshed silently from Claude Code keychain")
-            reconnectDiagnostic("handleAuthFailure recovered with a silent Claude credential refresh")
-            await performFetch(
-                with: freshToken,
-                userInitiated: userInitiated,
-                consultCredentialMetadata: false,
-                allowPreflightRefreshRecovery: allowPreflightRefreshRecovery,
-                allow401RefreshRecovery: false
-            )
-            return
+        if allow401RefreshRecovery {
+            reconnectDiagnostic("handleAuthFailure is skipping silent Claude credential refresh after 401")
         }
 
         presentReconnectRequired(noUsageMessage: "Token expired")
@@ -1108,6 +1130,12 @@ final class ClaudeUsageService {
         isHeadersFallbackActive = true
         oauthHeadersFallbackProbeUntil = dependencies.now().addingTimeInterval(Self.headersFallbackOAuthProbeInterval)
         didAttemptHeadersFallbackInOAuthBackoff = false
+        persistRecoverySnapshotIfNeeded()
+    }
+
+    private func resetHeadersFallbackProbeWindowFromWake() {
+        guard isHeadersFallbackActive else { return }
+        oauthHeadersFallbackProbeUntil = dependencies.now().addingTimeInterval(Self.headersFallbackOAuthProbeInterval)
         persistRecoverySnapshotIfNeeded()
     }
 

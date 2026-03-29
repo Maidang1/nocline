@@ -113,7 +113,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate, SP
     @objc private func handleSystemWake() {
         MainActor.assumeIsolated {
             logger.info("System woke, restarting Claude usage polling")
-            ClaudeUsageService.shared.startPolling()
+            ClaudeUsageService.shared.startPolling(afterSystemWake: true)
         }
     }
 
