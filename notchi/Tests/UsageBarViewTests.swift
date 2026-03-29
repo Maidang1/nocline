@@ -87,7 +87,7 @@ final class UsageBarViewTests: XCTestCase {
         XCTAssertTrue(view.shouldAllowTapAction)
     }
 
-    func testNoUsageReconnectStateStillShowsTapHint() {
+    func testNoUsageReconnectStateRemainsTappableWithoutActionHint() {
         let view = UsageBarView(
             usage: nil,
             isLoading: false,
@@ -98,7 +98,7 @@ final class UsageBarViewTests: XCTestCase {
             isEnabled: true
         )
 
-        XCTAssertEqual(view.actionHint, "(tap to reconnect)")
+        XCTAssertNil(view.actionHint)
         XCTAssertTrue(view.shouldAllowTapAction)
     }
 }

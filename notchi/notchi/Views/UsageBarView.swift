@@ -16,9 +16,7 @@ struct UsageBarView: View {
         switch recoveryAction {
         case .retry:
             return "(tap to retry)"
-        case .reconnect:
-            return "(tap to reconnect)"
-        case .none:
+        case .reconnect, .none:
             return nil
         }
     }

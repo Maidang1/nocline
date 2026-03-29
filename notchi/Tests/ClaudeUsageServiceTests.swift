@@ -1055,7 +1055,7 @@ final class ClaudeUsageServiceTests: XCTestCase {
         await Task.yield()
         await Task.yield()
 
-        XCTAssertEqual(getOAuthCredentialCalls, [false, false])
+        XCTAssertEqual(getOAuthCredentialCalls, [false])
         XCTAssertEqual(cachedTokens, ["silent-token"])
         XCTAssertEqual(service.currentUsage?.usagePercentage, 27)
         XCTAssertTrue(AppSettings.isUsageEnabled)
