@@ -300,6 +300,8 @@ final class ClaudeUsageService {
     }
 
     private func resolveStoredAccessToken(allowsCredentialRecovery: Bool) -> ClaudeUsageAccessTokenResolution? {
+        // Trim here even though the live dependency trims too, because tests
+        // and custom dependencies may inject raw values.
         if let environmentToken = dependencies.getOAuthTokenFromEnvironment()?
             .trimmingCharacters(in: .whitespacesAndNewlines),
            !environmentToken.isEmpty {
@@ -456,8 +458,7 @@ final class ClaudeUsageService {
         userInitiated: Bool = false,
         consultCredentialMetadata: Bool = true,
         allow403EmptyHeadersRecovery: Bool = true,
-        allowPreflightRefreshRecovery: Bool = true,
-        allow401RefreshRecovery: Bool = true
+        allowPreflightRefreshRecovery: Bool = true
     ) async {
         if userInitiated { isLoading = true }
 
@@ -470,7 +471,7 @@ final class ClaudeUsageService {
         }
 
         reconnectDiagnostic(
-            "performFetch starting: userInitiated=\(userInitiated), consultCredentialMetadata=\(consultCredentialMetadata), allow401RefreshRecovery=\(allow401RefreshRecovery), allowPreflightRefreshRecovery=\(allowPreflightRefreshRecovery)"
+            "performFetch starting: userInitiated=\(userInitiated), consultCredentialMetadata=\(consultCredentialMetadata), allowPreflightRefreshRecovery=\(allowPreflightRefreshRecovery)"
         )
 
         let effectiveAccessToken: String
@@ -478,8 +479,7 @@ final class ClaudeUsageService {
             let preflight = await preflightCredentials(
                 for: accessToken,
                 userInitiated: userInitiated,
-                allowPreflightRefreshRecovery: allowPreflightRefreshRecovery,
-                allow401RefreshRecovery: allow401RefreshRecovery
+                allowPreflightRefreshRecovery: allowPreflightRefreshRecovery
             )
             switch preflight {
             case let .proceed(token):
@@ -495,8 +495,7 @@ final class ClaudeUsageService {
             with: effectiveAccessToken,
             userAgent: userAgent,
             userInitiated: userInitiated,
-            allowPreflightRefreshRecovery: allowPreflightRefreshRecovery,
-            allow401RefreshRecovery: allow401RefreshRecovery
+            allowPreflightRefreshRecovery: allowPreflightRefreshRecovery
         ) {
             return
         }
@@ -505,8 +504,7 @@ final class ClaudeUsageService {
             with: effectiveAccessToken,
             userAgent: userAgent,
             userInitiated: userInitiated,
-            allowPreflightRefreshRecovery: allowPreflightRefreshRecovery,
-            allow401RefreshRecovery: allow401RefreshRecovery
+            allowPreflightRefreshRecovery: allowPreflightRefreshRecovery
         )
 
         if case .enterprise403 = result {
@@ -515,8 +513,7 @@ final class ClaudeUsageService {
                 userAgent: userAgent,
                 userInitiated: userInitiated,
                 allow403EmptyHeadersRecovery: allow403EmptyHeadersRecovery,
-                allowPreflightRefreshRecovery: allowPreflightRefreshRecovery,
-                allow401RefreshRecovery: allow401RefreshRecovery
+                allowPreflightRefreshRecovery: allowPreflightRefreshRecovery
             )
         }
     }
@@ -525,8 +522,7 @@ final class ClaudeUsageService {
         with accessToken: String,
         userAgent: String,
         userInitiated: Bool,
-        allowPreflightRefreshRecovery: Bool,
-        allow401RefreshRecovery: Bool
+        allowPreflightRefreshRecovery: Bool
     ) async -> Bool {
         guard preferHeadersFallback else {
             return false
@@ -543,8 +539,7 @@ final class ClaudeUsageService {
             userAgent: userAgent,
             userInitiated: userInitiated,
             context: .normalRetrying,
-            allowPreflightRefreshRecovery: allowPreflightRefreshRecovery,
-            allow401RefreshRecovery: allow401RefreshRecovery
+            allowPreflightRefreshRecovery: allowPreflightRefreshRecovery
         )
         return true
     }
@@ -554,8 +549,7 @@ final class ClaudeUsageService {
         userAgent: String,
         userInitiated: Bool,
         allow403EmptyHeadersRecovery: Bool,
-        allowPreflightRefreshRecovery: Bool,
-        allow401RefreshRecovery: Bool
+        allowPreflightRefreshRecovery: Bool
     ) async {
         preferHeadersFallback = true
         oauthRecheckCounter = 0
@@ -564,8 +558,7 @@ final class ClaudeUsageService {
             userAgent: userAgent,
             userInitiated: userInitiated,
             context: .normalNoRetry,
-            allowPreflightRefreshRecovery: allowPreflightRefreshRecovery,
-            allow401RefreshRecovery: allow401RefreshRecovery
+            allowPreflightRefreshRecovery: allowPreflightRefreshRecovery
         )
         if case .noHeadersFallback = fallbackResult {
             preferHeadersFallback = false
@@ -582,8 +575,7 @@ final class ClaudeUsageService {
         with accessToken: String,
         userAgent: String,
         userInitiated: Bool,
-        allowPreflightRefreshRecovery: Bool,
-        allow401RefreshRecovery: Bool
+        allowPreflightRefreshRecovery: Bool
     ) async -> FetchResult {
         var request = URLRequest(url: Self.usageURL)
         request.timeoutInterval = 30
@@ -642,8 +634,7 @@ final class ClaudeUsageService {
                             userAgent: userAgent,
                             userInitiated: userInitiated,
                             context: .oauthBackoffEntry,
-                            allowPreflightRefreshRecovery: allowPreflightRefreshRecovery,
-                            allow401RefreshRecovery: allow401RefreshRecovery
+                            allowPreflightRefreshRecovery: allowPreflightRefreshRecovery
                         )
                         if case .success = fallbackResult {
                             logger.info(
@@ -675,9 +666,7 @@ final class ClaudeUsageService {
                 if httpResponse.statusCode == 401 {
                     await handleAuthFailure(
                         currentToken: accessToken,
-                        userInitiated: userInitiated,
-                        allowPreflightRefreshRecovery: allowPreflightRefreshRecovery,
-                        allow401RefreshRecovery: allow401RefreshRecovery
+                        userInitiated: userInitiated
                     )
                     return .handled
                 }
@@ -720,8 +709,7 @@ final class ClaudeUsageService {
         userAgent: String,
         userInitiated: Bool,
         context: HeadersFetchContext = .normalRetrying,
-        allowPreflightRefreshRecovery: Bool = true,
-        allow401RefreshRecovery: Bool = true
+        allowPreflightRefreshRecovery: Bool = true
     ) async -> FetchResult {
         var request = URLRequest(url: Self.messagesURL)
         request.httpMethod = "POST"
@@ -764,9 +752,7 @@ final class ClaudeUsageService {
             if httpResponse.statusCode == 401 {
                 await handleAuthFailure(
                     currentToken: accessToken,
-                    userInitiated: userInitiated,
-                    allowPreflightRefreshRecovery: allowPreflightRefreshRecovery,
-                    allow401RefreshRecovery: allow401RefreshRecovery
+                    userInitiated: userInitiated
                 )
                 return .handled
             }
@@ -851,22 +837,14 @@ final class ClaudeUsageService {
 
     private func handleAuthFailure(
         currentToken: String,
-        userInitiated: Bool,
-        allowPreflightRefreshRecovery: Bool,
-        allow401RefreshRecovery: Bool
+        userInitiated: Bool
     ) async {
-        reconnectDiagnostic(
-            "handleAuthFailure entered after 401: userInitiated=\(userInitiated), allow401RefreshRecovery=\(allow401RefreshRecovery)"
-        )
+        reconnectDiagnostic("handleAuthFailure entered after 401: userInitiated=\(userInitiated)")
         cachedToken = nil
         clearOAuthBackoffState()
         preferHeadersFallback = false
         oauthRecheckCounter = 0
         dependencies.clearCachedOAuthToken()
-
-        if allow401RefreshRecovery {
-            reconnectDiagnostic("handleAuthFailure is skipping silent Claude credential refresh after 401")
-        }
 
         presentReconnectRequired(noUsageMessage: "Token expired")
         stopPolling()
@@ -875,8 +853,7 @@ final class ClaudeUsageService {
     private func preflightCredentials(
         for accessToken: String,
         userInitiated: Bool,
-        allowPreflightRefreshRecovery: Bool,
-        allow401RefreshRecovery: Bool
+        allowPreflightRefreshRecovery: Bool
     ) async -> PreflightResult {
         guard let credentials = dependencies.getOAuthCredentials(false) else {
             reconnectDiagnostic("preflightCredentials found no Claude credential metadata")
@@ -932,8 +909,7 @@ final class ClaudeUsageService {
                     with: freshToken,
                     userInitiated: userInitiated,
                     consultCredentialMetadata: false,
-                    allowPreflightRefreshRecovery: false,
-                    allow401RefreshRecovery: allow401RefreshRecovery
+                    allowPreflightRefreshRecovery: false
                 )
                 return .handled
             }

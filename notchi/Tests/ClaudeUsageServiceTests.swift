@@ -956,6 +956,8 @@ final class ClaudeUsageServiceTests: XCTestCase {
         XCTAssertTrue(getOAuthCredentialCalls.isEmpty)
         XCTAssertFalse(AppSettings.isUsageEnabled)
         XCTAssertFalse(service.isConnected)
+        XCTAssertNil(service.error)
+        XCTAssertNil(service.statusMessage)
         XCTAssertTrue(scheduler.intervals.isEmpty)
     }
 
@@ -2096,7 +2098,7 @@ final class ClaudeUsageServiceTests: XCTestCase {
         XCTAssertEqual(service.currentUsage?.usagePercentage, 75)
     }
 
-    func testOAuth401StillClearsToken() async throws {
+    func testOAuth401ClearsTokenAndPresentsReconnectWithoutRefresh() async throws {
         let scheduler = PollSchedulerSpy()
         var refreshCalls = 0
         var clearCalls = 0
