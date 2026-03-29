@@ -98,7 +98,7 @@ enum KeychainManager {
                let credentials = decodeClaudeOAuthCredentials(from: json) {
                 cacheRecentCredential(credentials, source: "/usr/bin/security CLI", at: now)
                 clearSecurityCLIBackoff()
-                logger.info("Claude credentials resolved via /usr/bin/security CLI")
+                logger.debug("Claude credentials resolved via /usr/bin/security CLI")
                 return credentials
             }
             recordSecurityCLIFailure(at: now)
@@ -131,6 +131,8 @@ enum KeychainManager {
         let pipe = Pipe()
         process.standardOutput = pipe
         process.standardError = FileHandle.nullDevice
+        let done = DispatchSemaphore(value: 0)
+        process.terminationHandler = { _ in done.signal() }
 
         do {
             try process.run()
@@ -138,8 +140,6 @@ enum KeychainManager {
             return nil
         }
 
-        let done = DispatchSemaphore(value: 0)
-        process.terminationHandler = { _ in done.signal() }
         if done.wait(timeout: .now() + .seconds(2)) == .timedOut {
             process.terminate()
             return nil
