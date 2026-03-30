@@ -72,6 +72,21 @@ final class UsageBarViewTests: XCTestCase {
         XCTAssertTrue(view.shouldAllowTapAction)
     }
 
+    func testUsagePresentWaitForClaudeCodeStateRemainsTappableWithoutRetryHint() {
+        let view = UsageBarView(
+            usage: QuotaPeriod(utilization: 42, resetDate: Date(timeIntervalSince1970: 4_102_444_800)),
+            isLoading: false,
+            error: nil,
+            statusMessage: "Start Claude Code to refresh credentials",
+            isStale: true,
+            recoveryAction: .waitForClaudeCode,
+            isEnabled: true
+        )
+
+        XCTAssertNil(view.actionHint)
+        XCTAssertTrue(view.shouldAllowTapAction)
+    }
+
     func testNoUsageRetryStateStillShowsTapHint() {
         let view = UsageBarView(
             usage: nil,
@@ -95,6 +110,21 @@ final class UsageBarViewTests: XCTestCase {
             statusMessage: nil,
             isStale: false,
             recoveryAction: .reconnect,
+            isEnabled: true
+        )
+
+        XCTAssertNil(view.actionHint)
+        XCTAssertTrue(view.shouldAllowTapAction)
+    }
+
+    func testNoUsageWaitForClaudeCodeStateRemainsTappableWithoutActionHint() {
+        let view = UsageBarView(
+            usage: nil,
+            isLoading: false,
+            error: "Start Claude Code to refresh credentials",
+            statusMessage: nil,
+            isStale: false,
+            recoveryAction: .waitForClaudeCode,
             isEnabled: true
         )
 
