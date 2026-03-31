@@ -49,9 +49,9 @@ final class NotchiStateMachineTests: XCTestCase {
 
     func testSessionStartForwardsToClaudeUsageHandler() {
         let stateMachine = NotchiStateMachine.shared
-        var sessionStartForwards = 0
-        stateMachine.handleClaudeSessionStart = {
-            sessionStartForwards += 1
+        var receivedTriggers: [ClaudeUsageResumeTrigger] = []
+        stateMachine.handleClaudeUsageResumeTrigger = { trigger in
+            receivedTriggers.append(trigger)
         }
 
         stateMachine.handleEvent(makeEvent(
@@ -60,7 +60,59 @@ final class NotchiStateMachineTests: XCTestCase {
             status: "processing"
         ))
 
-        XCTAssertEqual(sessionStartForwards, 1)
+        XCTAssertEqual(receivedTriggers, [.sessionStart])
+    }
+
+    func testInteractiveUserPromptSubmitForwardsToClaudeUsageHandler() {
+        let stateMachine = NotchiStateMachine.shared
+        var receivedTriggers: [ClaudeUsageResumeTrigger] = []
+        stateMachine.handleClaudeUsageResumeTrigger = { trigger in
+            receivedTriggers.append(trigger)
+        }
+
+        stateMachine.handleEvent(makeEvent(
+            sessionId: "prompt-submit-\(UUID().uuidString)",
+            event: "UserPromptSubmit",
+            status: "processing",
+            userPrompt: "hello"
+        ))
+
+        XCTAssertEqual(receivedTriggers, [.userPromptSubmit])
+    }
+
+    func testLocalSlashUserPromptSubmitDoesNotForwardToClaudeUsageHandler() {
+        let stateMachine = NotchiStateMachine.shared
+        var receivedTriggers: [ClaudeUsageResumeTrigger] = []
+        stateMachine.handleClaudeUsageResumeTrigger = { trigger in
+            receivedTriggers.append(trigger)
+        }
+
+        stateMachine.handleEvent(makeEvent(
+            sessionId: "local-prompt-\(UUID().uuidString)",
+            event: "UserPromptSubmit",
+            status: "processing",
+            userPrompt: "/help"
+        ))
+
+        XCTAssertTrue(receivedTriggers.isEmpty)
+    }
+
+    func testNonInteractiveUserPromptSubmitDoesNotForwardToClaudeUsageHandler() {
+        let stateMachine = NotchiStateMachine.shared
+        var receivedTriggers: [ClaudeUsageResumeTrigger] = []
+        stateMachine.handleClaudeUsageResumeTrigger = { trigger in
+            receivedTriggers.append(trigger)
+        }
+
+        stateMachine.handleEvent(makeEvent(
+            sessionId: "noninteractive-prompt-\(UUID().uuidString)",
+            event: "UserPromptSubmit",
+            status: "processing",
+            userPrompt: "hello",
+            interactive: false
+        ))
+
+        XCTAssertTrue(receivedTriggers.isEmpty)
     }
 
     private func makeInteractiveSession(sessionId: String) -> SessionData {
@@ -80,7 +132,8 @@ final class NotchiStateMachineTests: XCTestCase {
         sessionId: String,
         event: String,
         status: String,
-        userPrompt: String? = nil
+        userPrompt: String? = nil,
+        interactive: Bool = true
     ) -> HookEvent {
         HookEvent(
             sessionId: sessionId,
@@ -94,7 +147,7 @@ final class NotchiStateMachineTests: XCTestCase {
             toolUseId: nil,
             userPrompt: userPrompt,
             permissionMode: nil,
-            interactive: true
+            interactive: interactive
         )
     }
 }

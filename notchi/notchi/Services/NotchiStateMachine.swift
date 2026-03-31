@@ -14,8 +14,8 @@ final class NotchiStateMachine {
     private var pendingSyncTasks: [String: Task<Void, Never>] = [:]
     private var pendingPositionMarks: [String: Task<Void, Never>] = [:]
     private var fileWatchers: [String: (source: DispatchSourceFileSystemObject, fd: Int32)] = [:]
-    var handleClaudeSessionStart: () -> Void = {
-        ClaudeUsageService.shared.handleClaudeSessionStart()
+    var handleClaudeUsageResumeTrigger: (ClaudeUsageResumeTrigger) -> Void = { trigger in
+        ClaudeUsageService.shared.handleClaudeResumeTrigger(trigger)
     }
 
     private static let syncDebounce: Duration = .milliseconds(100)
@@ -52,6 +52,10 @@ final class NotchiStateMachine {
                 }
             }
 
+            if session.isInteractive, !SessionStore.isLocalSlashCommand(event.userPrompt) {
+                handleClaudeUsageResumeTrigger(.userPromptSubmit)
+            }
+
         case "PreToolUse":
             if isDone {
                 SoundService.shared.playNotificationSound(sessionId: event.sessionId, isInteractive: session.isInteractive)
@@ -64,7 +68,7 @@ final class NotchiStateMachine {
             scheduleFileSync(sessionId: event.sessionId, cwd: event.cwd)
 
         case "SessionStart":
-            handleClaudeSessionStart()
+            handleClaudeUsageResumeTrigger(.sessionStart)
 
         case "Stop":
             SoundService.shared.playNotificationSound(sessionId: event.sessionId, isInteractive: session.isInteractive)
@@ -189,8 +193,8 @@ final class NotchiStateMachine {
     }
 
     func resetTestingHooks() {
-        handleClaudeSessionStart = {
-            ClaudeUsageService.shared.handleClaudeSessionStart()
+        handleClaudeUsageResumeTrigger = { trigger in
+            ClaudeUsageService.shared.handleClaudeResumeTrigger(trigger)
         }
     }
 
