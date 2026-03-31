@@ -7,6 +7,7 @@ final class NotchiStateMachineTests: XCTestCase {
     override func tearDown() async throws {
         let sessionIds = Array(SessionStore.shared.sessions.keys)
         sessionIds.forEach { SessionStore.shared.dismissSession($0) }
+        NotchiStateMachine.shared.resetTestingHooks()
         try await super.tearDown()
     }
 
@@ -44,6 +45,22 @@ final class NotchiStateMachineTests: XCTestCase {
 
         XCTAssertEqual(session.task, .idle)
         XCTAssertFalse(session.isProcessing)
+    }
+
+    func testSessionStartForwardsToClaudeUsageHandler() {
+        let stateMachine = NotchiStateMachine.shared
+        var sessionStartForwards = 0
+        stateMachine.handleClaudeSessionStart = {
+            sessionStartForwards += 1
+        }
+
+        stateMachine.handleEvent(makeEvent(
+            sessionId: "session-start-\(UUID().uuidString)",
+            event: "SessionStart",
+            status: "processing"
+        ))
+
+        XCTAssertEqual(sessionStartForwards, 1)
     }
 
     private func makeInteractiveSession(sessionId: String) -> SessionData {

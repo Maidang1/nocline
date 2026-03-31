@@ -200,10 +200,12 @@ final class ClaudeUsageService {
     private static let oauthRecheckPollCount = 10
     private static let headersFallbackOAuthProbeInterval: TimeInterval = 600
     private static let headersFallbackRefreshInterval: TimeInterval = 60
+    private static let sessionStartReconnectDelay: TimeInterval = 2
 
     private let dependencies: ClaudeUsageServiceDependencies
     private var resolvedUserAgent: String?
     private var pollTimer: (any ClaudeUsagePollTimer)?
+    private var pendingSessionStartReconnectTimer: (any ClaudeUsagePollTimer)?
     private let pollInterval: TimeInterval = 60
     private var consecutiveRateLimits = 0
     private var cachedToken: String?
@@ -246,6 +248,33 @@ final class ClaudeUsageService {
                 consultCredentialMetadata: true,
                 cachedCredentials: resolution.credentials
             )
+        }
+    }
+
+    func handleClaudeSessionStart() {
+        guard AppSettings.isUsageEnabled else {
+            return
+        }
+
+        guard recoveryAction == .waitForClaudeCode else {
+            return
+        }
+
+        guard !isLoading else {
+            logger.info("Ignoring SessionStart usage retry while a fetch is already in flight")
+            return
+        }
+
+        guard pendingSessionStartReconnectTimer == nil else {
+            logger.info("Ignoring duplicate SessionStart while a Claude usage retry is already pending")
+            return
+        }
+
+        logger.info("Scheduling Claude usage reconnect 2s after SessionStart")
+        pendingSessionStartReconnectTimer = dependencies.schedulePoll(Self.sessionStartReconnectDelay) { [weak self] in
+            Task { @MainActor [weak self] in
+                self?.performDelayedSessionStartReconnect()
+            }
         }
     }
 
@@ -409,6 +438,7 @@ final class ClaudeUsageService {
     func stopPolling() {
         pollTimer?.invalidate()
         pollTimer = nil
+        clearPendingSessionStartReconnect()
     }
 
     private func schedulePollTimer(interval: TimeInterval? = nil, minimumInterval: TimeInterval? = nil) {
@@ -1105,10 +1135,38 @@ final class ClaudeUsageService {
     }
 
     private func clearTransientState() {
+        clearPendingSessionStartReconnect()
         error = nil
         statusMessage = nil
         isUsageStale = false
         recoveryAction = .none
+    }
+
+    private func clearPendingSessionStartReconnect() {
+        pendingSessionStartReconnectTimer?.invalidate()
+        pendingSessionStartReconnectTimer = nil
+    }
+
+    private func performDelayedSessionStartReconnect() {
+        pendingSessionStartReconnectTimer = nil
+
+        guard AppSettings.isUsageEnabled else {
+            logger.info("Skipping SessionStart usage retry because Claude usage is disabled")
+            return
+        }
+
+        guard recoveryAction == .waitForClaudeCode else {
+            logger.info("Skipping SessionStart usage retry because Claude usage no longer waits for Claude Code")
+            return
+        }
+
+        guard !isLoading else {
+            logger.info("Skipping SessionStart usage retry because a fetch is already in flight")
+            return
+        }
+
+        logger.info("Retrying Claude usage after SessionStart")
+        connectAndStartPolling()
     }
 
     private func activeOAuthBackoffRemaining() -> TimeInterval? {
@@ -1194,6 +1252,7 @@ final class ClaudeUsageService {
     }
 
     private func presentOAuthBackoffState(remaining: TimeInterval) {
+        clearPendingSessionStartReconnect()
         recoveryAction = .retry
         let roundedDelay = Int(ceil(remaining))
 
@@ -1315,6 +1374,7 @@ final class ClaudeUsageService {
     }
 
     private func presentRetryableIssue(noUsageMessage: String, staleMessage: String) {
+        clearPendingSessionStartReconnect()
         recoveryAction = .retry
         if currentUsage == nil {
             error = noUsageMessage
@@ -1328,6 +1388,7 @@ final class ClaudeUsageService {
     }
 
     private func presentReconnectRequired(message: String) {
+        clearPendingSessionStartReconnect()
         recoveryAction = .reconnect
         isConnected = false
         if currentUsage == nil {
@@ -1342,6 +1403,7 @@ final class ClaudeUsageService {
     }
 
     private func presentWaitForClaudeCode(message: String) {
+        clearPendingSessionStartReconnect()
         recoveryAction = .waitForClaudeCode
         isConnected = false
         if currentUsage == nil {

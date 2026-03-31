@@ -14,6 +14,9 @@ final class NotchiStateMachine {
     private var pendingSyncTasks: [String: Task<Void, Never>] = [:]
     private var pendingPositionMarks: [String: Task<Void, Never>] = [:]
     private var fileWatchers: [String: (source: DispatchSourceFileSystemObject, fd: Int32)] = [:]
+    var handleClaudeSessionStart: () -> Void = {
+        ClaudeUsageService.shared.handleClaudeSessionStart()
+    }
 
     private static let syncDebounce: Duration = .milliseconds(100)
     private static let waitingClearGuard: TimeInterval = 2.0
@@ -59,6 +62,9 @@ final class NotchiStateMachine {
 
         case "PostToolUse":
             scheduleFileSync(sessionId: event.sessionId, cwd: event.cwd)
+
+        case "SessionStart":
+            handleClaudeSessionStart()
 
         case "Stop":
             SoundService.shared.playNotificationSound(sessionId: event.sessionId, isInteractive: session.isInteractive)
@@ -179,6 +185,12 @@ final class NotchiStateMachine {
                     session.emotionState.decayAll()
                 }
             }
+        }
+    }
+
+    func resetTestingHooks() {
+        handleClaudeSessionStart = {
+            ClaudeUsageService.shared.handleClaudeSessionStart()
         }
     }
 

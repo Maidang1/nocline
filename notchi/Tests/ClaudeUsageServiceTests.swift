@@ -2,23 +2,48 @@ import Foundation
 import XCTest
 @testable import notchi
 
+private final class PollSchedulerEntry {
+    let interval: TimeInterval
+    let handler: () -> Void
+    var isInvalidated = false
+
+    init(interval: TimeInterval, handler: @escaping () -> Void) {
+        self.interval = interval
+        self.handler = handler
+    }
+}
+
 private struct TestPollTimer: ClaudeUsagePollTimer {
-    func invalidate() {}
+    let invalidateHandler: () -> Void
+
+    func invalidate() {
+        invalidateHandler()
+    }
 }
 
 @MainActor
 private final class PollSchedulerSpy {
     private(set) var intervals: [TimeInterval] = []
-    private var handlers: [() -> Void] = []
+    private var entries: [PollSchedulerEntry] = []
 
     func schedule(after interval: TimeInterval, handler: @escaping () -> Void) -> any ClaudeUsagePollTimer {
         intervals.append(interval)
-        handlers.append(handler)
-        return TestPollTimer()
+        let entry = PollSchedulerEntry(interval: interval, handler: handler)
+        entries.append(entry)
+        return TestPollTimer {
+            entry.isInvalidated = true
+        }
     }
 
     func fireLast() {
-        handlers.last?()
+        fire(at: entries.count - 1)
+    }
+
+    func fire(at index: Int) {
+        guard entries.indices.contains(index) else { return }
+        let entry = entries[index]
+        guard !entry.isInvalidated else { return }
+        entry.handler()
     }
 }
 
@@ -1133,6 +1158,159 @@ final class ClaudeUsageServiceTests: XCTestCase {
         XCTAssertEqual(service.recoveryAction, .waitForClaudeCode)
         XCTAssertEqual(service.currentUsage?.usagePercentage, 55)
         XCTAssertTrue(scheduler.intervals.isEmpty)
+    }
+
+    func testHandleClaudeSessionStartSchedulesDelayedReconnectFromWaitForClaudeCode() async throws {
+        let scheduler = PollSchedulerSpy()
+        var fetchCount = 0
+        let fetchExpectation = expectation(description: "SessionStart triggers delayed usage reconnect")
+        let dependencies = makeDependencies(
+            scheduler: scheduler,
+            resolveUserAgent: { "claude-code/2.1.77" },
+            getOAuthCredentials: { allowInteraction in
+                XCTAssertFalse(allowInteraction)
+                return self.makeCredentials(accessToken: "fresh-token", scopes: ["user:profile"])
+            },
+            fetchUsage: { request in
+                fetchCount += 1
+                fetchExpectation.fulfill()
+                XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer fresh-token")
+                return (self.makeSuccessPayload(utilization: 29), self.makeResponse(statusCode: 200))
+            }
+        )
+
+        let service = ClaudeUsageService(dependencies: dependencies)
+        AppSettings.isUsageEnabled = true
+        service.recoveryAction = .waitForClaudeCode
+        service.error = "Start a Claude Code session to refresh credentials"
+
+        service.handleClaudeSessionStart()
+
+        XCTAssertEqual(fetchCount, 0)
+        XCTAssertEqual(scheduler.intervals, [2])
+
+        scheduler.fireLast()
+        await fulfillment(of: [fetchExpectation], timeout: 1)
+
+        XCTAssertEqual(fetchCount, 1)
+        XCTAssertEqual(service.currentUsage?.usagePercentage, 29)
+        XCTAssertEqual(service.recoveryAction, .none)
+        XCTAssertEqual(scheduler.intervals, [2, 60])
+    }
+
+    func testHandleClaudeSessionStartIgnoresDuplicateEventsWhileRetryIsPending() async throws {
+        let scheduler = PollSchedulerSpy()
+        var fetchCount = 0
+        let fetchExpectation = expectation(description: "Duplicate SessionStart still triggers only one reconnect")
+        let dependencies = makeDependencies(
+            scheduler: scheduler,
+            resolveUserAgent: { "claude-code/2.1.77" },
+            getOAuthCredentials: { _ in
+                self.makeCredentials(accessToken: "fresh-token", scopes: ["user:profile"])
+            },
+            fetchUsage: { _ in
+                fetchCount += 1
+                fetchExpectation.fulfill()
+                return (self.makeSuccessPayload(utilization: 31), self.makeResponse(statusCode: 200))
+            }
+        )
+
+        let service = ClaudeUsageService(dependencies: dependencies)
+        AppSettings.isUsageEnabled = true
+        service.recoveryAction = .waitForClaudeCode
+
+        service.handleClaudeSessionStart()
+        service.handleClaudeSessionStart()
+
+        XCTAssertEqual(fetchCount, 0)
+        XCTAssertEqual(scheduler.intervals, [2])
+
+        scheduler.fireLast()
+        await fulfillment(of: [fetchExpectation], timeout: 1)
+
+        XCTAssertEqual(fetchCount, 1)
+        XCTAssertEqual(scheduler.intervals, [2, 60])
+    }
+
+    func testHandleClaudeSessionStartDoesNothingOutsideWaitForClaudeCode() async throws {
+        let scheduler = PollSchedulerSpy()
+        var fetchCount = 0
+        let dependencies = makeDependencies(
+            scheduler: scheduler,
+            resolveUserAgent: { "claude-code/2.1.77" },
+            fetchUsage: { _ in
+                fetchCount += 1
+                return (self.makeSuccessPayload(utilization: 31), self.makeResponse(statusCode: 200))
+            }
+        )
+
+        let service = ClaudeUsageService(dependencies: dependencies)
+        AppSettings.isUsageEnabled = true
+
+        service.handleClaudeSessionStart()
+
+        XCTAssertEqual(fetchCount, 0)
+        XCTAssertTrue(scheduler.intervals.isEmpty)
+    }
+
+    func testHandleClaudeSessionStartDoesNothingWhenUsageIsDisabled() async throws {
+        let scheduler = PollSchedulerSpy()
+        var fetchCount = 0
+        let dependencies = makeDependencies(
+            scheduler: scheduler,
+            resolveUserAgent: { "claude-code/2.1.77" },
+            fetchUsage: { _ in
+                fetchCount += 1
+                return (self.makeSuccessPayload(utilization: 31), self.makeResponse(statusCode: 200))
+            }
+        )
+
+        let service = ClaudeUsageService(dependencies: dependencies)
+        AppSettings.isUsageEnabled = false
+        service.recoveryAction = .waitForClaudeCode
+
+        service.handleClaudeSessionStart()
+
+        XCTAssertEqual(fetchCount, 0)
+        XCTAssertTrue(scheduler.intervals.isEmpty)
+    }
+
+    func testManualReconnectCancelsPendingSessionStartRetry() async throws {
+        let scheduler = PollSchedulerSpy()
+        var fetchCount = 0
+        let dependencies = makeDependencies(
+            scheduler: scheduler,
+            resolveUserAgent: { "claude-code/2.1.77" },
+            getOAuthCredentials: { _ in
+                self.makeCredentials(accessToken: "fresh-token", scopes: ["user:profile"])
+            },
+            fetchUsage: { _ in
+                fetchCount += 1
+                return (self.makeSuccessPayload(utilization: 34), self.makeResponse(statusCode: 200))
+            }
+        )
+
+        let service = ClaudeUsageService(dependencies: dependencies)
+        AppSettings.isUsageEnabled = true
+        service.recoveryAction = .waitForClaudeCode
+        service.error = "Start a Claude Code session to refresh credentials"
+
+        service.handleClaudeSessionStart()
+        XCTAssertEqual(scheduler.intervals, [2])
+
+        service.connectAndStartPolling()
+        await Task.yield()
+        await Task.yield()
+        await Task.yield()
+
+        XCTAssertEqual(fetchCount, 1)
+
+        scheduler.fire(at: 0)
+        await Task.yield()
+        await Task.yield()
+
+        XCTAssertEqual(fetchCount, 1)
+        XCTAssertEqual(scheduler.intervals, [2, 60])
     }
 
     func testConnectAndStartPollingPrefersClaudeCredentialsOverCachedToken() async throws {
