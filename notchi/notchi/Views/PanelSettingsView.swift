@@ -24,14 +24,14 @@ struct PanelSettingsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: SettingsLayout.sectionSpacing) {
                     displaySection
                     Divider().background(Color.white.opacity(0.08))
                     togglesSection
                     Divider().background(Color.white.opacity(0.08))
                     actionsSection
                 }
-                .padding(.top, 10)
+                .padding(.top, SettingsLayout.topPadding)
             }
             .scrollIndicators(.hidden)
 
@@ -39,13 +39,13 @@ struct PanelSettingsView: View {
 
             quitSection
         }
-        .padding(.horizontal, 12)
-        .padding(.top, 10)
+        .padding(.horizontal, SettingsLayout.panelHorizontalPadding)
+        .padding(.top, SettingsLayout.topPadding)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private var displaySection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: SettingsLayout.sectionSpacing) {
             ScreenPickerRow(screenSelector: ScreenSelector.shared)
 
             SoundPickerView()
@@ -53,7 +53,7 @@ struct PanelSettingsView: View {
     }
 
     private var togglesSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: SettingsLayout.sectionSpacing) {
             Button(action: toggleLaunchAtLogin) {
                 SettingsRowView(icon: "power", title: "Launch at Login") {
                     ToggleSwitch(isOn: launchAtLogin)
@@ -90,7 +90,7 @@ struct PanelSettingsView: View {
     }
 
     private var apiKeyRow: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: SettingsLayout.apiKeySpacing) {
             SettingsRowView(icon: "brain", title: "Emotion Analysis") {
                 statusBadge(
                     hasApiKey ? "Active" : "No Key",
@@ -103,8 +103,8 @@ struct PanelSettingsView: View {
                     .textFieldStyle(.plain)
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundColor(TerminalColors.primaryText)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 5)
+                    .padding(.horizontal, SettingsLayout.fieldHorizontalPadding)
+                    .padding(.vertical, SettingsLayout.fieldVerticalPadding)
                     .background(Color.white.opacity(0.06))
                     .cornerRadius(6)
                     .onSubmit { saveApiKey() }
@@ -113,7 +113,7 @@ struct PanelSettingsView: View {
                             Text("Anthropic API Key")
                                 .font(.system(size: 11, design: .monospaced))
                                 .foregroundColor(TerminalColors.dimmedText)
-                                .padding(.leading, 8)
+                                .padding(.leading, SettingsLayout.fieldHorizontalPadding)
                                 .allowsHitTesting(false)
                         }
                     }
@@ -125,7 +125,7 @@ struct PanelSettingsView: View {
                 }
                 .buttonStyle(.plain)
             }
-            .padding(.leading, 28)
+            .padding(.leading, SettingsLayout.fieldLeadingInset)
         }
     }
 
@@ -135,7 +135,7 @@ struct PanelSettingsView: View {
     }
 
     private var actionsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: SettingsLayout.sectionSpacing) {
             Button(action: handleUpdatesAction) {
                 SettingsRowView(icon: "arrow.triangle.2.circlepath", title: "Check for Updates") {
                     updateStatusView
@@ -174,14 +174,14 @@ struct PanelSettingsView: View {
             }
             .foregroundColor(TerminalColors.red)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.vertical, 10)
-            .padding(.horizontal, 12)
+            .padding(.vertical, SettingsLayout.quitButtonVerticalPadding)
+            .padding(.horizontal, SettingsLayout.quitButtonHorizontalPadding)
             .background(TerminalColors.red.opacity(0.1))
             .contentShape(Rectangle())
             .cornerRadius(8)
         }
         .buttonStyle(.plain)
-        .padding(.bottom, 8)
+        .padding(.bottom, SettingsLayout.quitBottomPadding)
     }
 
     private func toggleLaunchAtLogin() {
@@ -292,7 +292,7 @@ struct SettingsRowView<Trailing: View>: View {
 
             trailing()
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, SettingsLayout.rowVerticalPadding)
         .contentShape(Rectangle())
     }
 }
