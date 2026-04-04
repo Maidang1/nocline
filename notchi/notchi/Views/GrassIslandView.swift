@@ -16,6 +16,12 @@ private enum SpriteLayout {
     }
 }
 
+private enum GrassTexture {
+    static let image = Image("GrassIsland")
+    static let pixelSize = CGSize(width: 512, height: 512)
+    static let tileWidth: CGFloat = 80
+}
+
 // MARK: - Visual layer (placed in .background, no interaction)
 
 struct GrassIslandView: View {
@@ -23,22 +29,12 @@ struct GrassIslandView: View {
     var selectedSessionId: String?
     var hoveredSessionId: String?
 
-    private let patchWidth: CGFloat = 80
-
     var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .bottom) {
-                HStack(spacing: 0) {
-                    ForEach(0..<patchCount(for: geometry.size.width), id: \.self) { _ in
-                        Image("GrassIsland")
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: patchWidth, height: geometry.size.height)
-                            .clipped()
-                    }
-                }
-                .frame(width: geometry.size.width, alignment: .leading)
-                .drawingGroup()
+                Rectangle()
+                    .fill(grassPaint(for: geometry.size))
+                    .frame(width: geometry.size.width, height: geometry.size.height)
 
                 if sessions.isEmpty {
                     GrassSpriteView(state: .idle, xPosition: 0.5, yOffset: -15, totalWidth: geometry.size.width, glowOpacity: 0)
@@ -66,8 +62,28 @@ struct GrassIslandView: View {
         return 0
     }
 
-    private func patchCount(for width: CGFloat) -> Int {
-        Int(ceil(width / patchWidth)) + 1
+    private func grassPaint(for size: CGSize) -> ImagePaint {
+        let scale = max(GrassTexture.tileWidth / GrassTexture.pixelSize.width, size.height / GrassTexture.pixelSize.height)
+        let drawnSize = CGSize(
+            width: GrassTexture.pixelSize.width * scale,
+            height: GrassTexture.pixelSize.height * scale
+        )
+        let visibleWidthFraction = min(1, GrassTexture.tileWidth / drawnSize.width)
+        let visibleHeightFraction = min(1, size.height / drawnSize.height)
+
+        // Match the old 80pt aspect-fill tile crop while drawing as a single paint.
+        let sourceRect = CGRect(
+            x: (1 - visibleWidthFraction) / 2,
+            y: (1 - visibleHeightFraction) / 2,
+            width: visibleWidthFraction,
+            height: visibleHeightFraction
+        )
+
+        return ImagePaint(
+            image: GrassTexture.image,
+            sourceRect: sourceRect,
+            scale: scale
+        )
     }
 }
 

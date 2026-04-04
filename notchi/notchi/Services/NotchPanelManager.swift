@@ -6,10 +6,12 @@ final class NotchPanelManager {
     enum CollapsedMode: Equatable {
         case normalCollapsed
         case compactIdle
-        case compactHoverPreview
     }
 
     static let shared = NotchPanelManager()
+    // Reference hover growth reads wider than taller, so keep the hover expansion biased horizontally.
+    static let collapsedHoverHorizontalInset: CGFloat = 7.5
+    static let collapsedHoverBottomInset: CGFloat = 5
 
     private static let compactNotchPaddingTotal: CGFloat = 16
     private static func makeCompactNotchRect(notchSize: CGSize, notchRect: CGRect) -> CGRect {
@@ -20,20 +22,30 @@ final class NotchPanelManager {
             height: notchRect.height
         )
     }
+    private static func makeCollapsedHoverRect(baseRect: CGRect) -> CGRect {
+        CGRect(
+            x: baseRect.minX - collapsedHoverHorizontalInset,
+            y: baseRect.minY - collapsedHoverBottomInset,
+            width: baseRect.width + (collapsedHoverHorizontalInset * 2),
+            height: baseRect.height + collapsedHoverBottomInset
+        )
+    }
 
     private let notificationCenter: NotificationCenter
     private let userDefaults: UserDefaults
     private let hoverExitDelay: Duration
     private let activeSessionCountProvider: @MainActor () -> Int
+    private let mouseLocationProvider: @MainActor () -> CGPoint
 
     private var observerTokens: [NSObjectProtocol] = []
     private var cachedShouldUseCompactIdle = false
-    private var pendingCompactIdleTask: Task<Void, Never>?
+    private var pendingHoverExitTask: Task<Void, Never>?
     private var mouseDownMonitor: EventMonitor?
     private var mouseMoveMonitor: EventMonitor?
 
     private(set) var isExpanded = false
     private(set) var isPinned = false
+    private(set) var isCollapsedHovered = false
     private(set) var collapsedMode: CollapsedMode = .normalCollapsed
     private(set) var notchSize: CGSize = .zero
     private(set) var notchRect: CGRect = .zero
@@ -42,15 +54,20 @@ final class NotchPanelManager {
     /// The exact notch shape from the system bezel path, or nil if unavailable
     private(set) var systemNotchPath: CGPath?
 
-    var activeCollapsedRect: CGRect {
+    private var collapsedBaseRect: CGRect {
         collapsedMode == .compactIdle ? compactNotchRect : notchRect
+    }
+
+    var activeCollapsedRect: CGRect {
+        isCollapsedHovered ? Self.makeCollapsedHoverRect(baseRect: collapsedBaseRect) : collapsedBaseRect
     }
 
     init(
         notificationCenter: NotificationCenter = .default,
         userDefaults: UserDefaults = .standard,
-        hoverExitDelay: Duration = .milliseconds(150),
+        hoverExitDelay: Duration = .zero,
         activeSessionCountProvider: @escaping @MainActor () -> Int = { SessionStore.shared.activeSessionCount },
+        mouseLocationProvider: @escaping @MainActor () -> CGPoint = { NSEvent.mouseLocation },
         startEventMonitors: Bool = true,
         observeExternalState: Bool = true
     ) {
@@ -58,6 +75,7 @@ final class NotchPanelManager {
         self.userDefaults = userDefaults
         self.hoverExitDelay = hoverExitDelay
         self.activeSessionCountProvider = activeSessionCountProvider
+        self.mouseLocationProvider = mouseLocationProvider
 
         if startEventMonitors {
             setupEventMonitors()
@@ -71,7 +89,7 @@ final class NotchPanelManager {
 
     isolated deinit {
         observerTokens.forEach { notificationCenter.removeObserver($0) }
-        pendingCompactIdleTask?.cancel()
+        pendingHoverExitTask?.cancel()
     }
 
     func updateGeometry(for screen: NSScreen) {
@@ -126,16 +144,18 @@ final class NotchPanelManager {
 
     func expand() {
         guard !isExpanded else { return }
-        cancelPendingCompactIdleTask()
+        cancelPendingHoverExitTask()
+        setCollapsedHovered(false)
         isExpanded = true
         refreshIdleMode()
     }
 
     func collapse() {
         guard isExpanded else { return }
-        cancelPendingCompactIdleTask()
+        cancelPendingHoverExitTask()
         isExpanded = false
         isPinned = false
+        setCollapsedHovered(false)
         refreshIdleMode()
     }
 
@@ -152,37 +172,24 @@ final class NotchPanelManager {
     }
 
     private func handleCollapsedHoverEntered() {
-        cancelPendingCompactIdleTask()
-        guard !isExpanded, cachedShouldUseCompactIdle else { return }
-
-        if collapsedMode == .compactIdle {
-            setCollapsedMode(.compactHoverPreview)
-        }
+        cancelPendingHoverExitTask()
+        guard !isExpanded else { return }
+        setCollapsedHovered(true)
     }
 
     private func handleCollapsedHoverExited() {
-        guard !isExpanded,
-              cachedShouldUseCompactIdle,
-              collapsedMode == .compactHoverPreview else { return }
-        scheduleCompactIdleReturn()
+        guard !isExpanded, isCollapsedHovered else { return }
+        scheduleHoverExit()
     }
 
     func handleMouseLocationChanged(_ location: CGPoint) {
-        guard !isExpanded, cachedShouldUseCompactIdle else { return }
+        guard !isExpanded else { return }
 
-        switch collapsedMode {
-        case .compactIdle:
-            if compactNotchRect.contains(location) {
-                handleCollapsedHoverEntered()
-            }
-        case .compactHoverPreview:
-            if notchRect.contains(location) {
-                cancelPendingCompactIdleTask()
-            } else {
-                handleCollapsedHoverExited()
-            }
-        case .normalCollapsed:
-            break
+        let trackingRect = isCollapsedHovered ? activeCollapsedRect : collapsedBaseRect
+        if trackingRect.contains(location) {
+            handleCollapsedHoverEntered()
+        } else {
+            handleCollapsedHoverExited()
         }
     }
 
@@ -191,20 +198,20 @@ final class NotchPanelManager {
             && activeSessionCountProvider() == 0
 
         if !cachedShouldUseCompactIdle {
-            cancelPendingCompactIdleTask()
+            cancelPendingHoverExitTask()
             setCollapsedMode(.normalCollapsed)
+            resyncCollapsedHoverIfNeeded()
             return
         }
 
         if isExpanded {
-            cancelPendingCompactIdleTask()
+            cancelPendingHoverExitTask()
             setCollapsedMode(.compactIdle)
             return
         }
 
-        if collapsedMode != .compactHoverPreview {
-            setCollapsedMode(.compactIdle)
-        }
+        setCollapsedMode(.compactIdle)
+        resyncCollapsedHoverIfNeeded()
     }
 
     private func setupObservers() {
@@ -262,27 +269,42 @@ final class NotchPanelManager {
         }
     }
 
-    private func scheduleCompactIdleReturn() {
-        cancelPendingCompactIdleTask()
-        pendingCompactIdleTask = Task { [weak self, hoverExitDelay] in
+    private func scheduleHoverExit() {
+        cancelPendingHoverExitTask()
+        if hoverExitDelay == .zero {
+            setCollapsedHovered(false)
+            return
+        }
+
+        pendingHoverExitTask = Task { [weak self, hoverExitDelay] in
             try? await Task.sleep(for: hoverExitDelay)
             guard !Task.isCancelled else { return }
 
             await MainActor.run {
                 guard let self else { return }
-                guard !self.isExpanded, self.cachedShouldUseCompactIdle else { return }
-                self.setCollapsedMode(.compactIdle)
+                guard !self.isExpanded else { return }
+                self.setCollapsedHovered(false)
             }
         }
     }
 
-    private func cancelPendingCompactIdleTask() {
-        pendingCompactIdleTask?.cancel()
-        pendingCompactIdleTask = nil
+    private func cancelPendingHoverExitTask() {
+        pendingHoverExitTask?.cancel()
+        pendingHoverExitTask = nil
+    }
+
+    private func resyncCollapsedHoverIfNeeded() {
+        guard isCollapsedHovered, !isExpanded else { return }
+        handleMouseLocationChanged(mouseLocationProvider())
     }
 
     private func setCollapsedMode(_ newMode: CollapsedMode) {
         guard collapsedMode != newMode else { return }
         collapsedMode = newMode
+    }
+
+    private func setCollapsedHovered(_ newValue: Bool) {
+        guard isCollapsedHovered != newValue else { return }
+        isCollapsedHovered = newValue
     }
 }

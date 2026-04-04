@@ -33,11 +33,28 @@ struct NotchContentView: View {
     private var isExpanded: Bool { panelManager.isExpanded }
     private var collapsedMode: NotchPanelManager.CollapsedMode { panelManager.collapsedMode }
     private var isCompactIdle: Bool { !isExpanded && collapsedMode == .compactIdle }
+    private var collapsedHoverHorizontalInset: CGFloat {
+        !isExpanded && panelManager.isCollapsedHovered
+            ? NotchPanelManager.collapsedHoverHorizontalInset
+            : 0
+    }
+
+    private var collapsedHoverBottomInset: CGFloat {
+        !isExpanded && panelManager.isCollapsedHovered
+            ? NotchPanelManager.collapsedHoverBottomInset
+            : 0
+    }
 
     private var panelAnimation: Animation {
         isExpanded
             ? .spring(response: 0.42, dampingFraction: 0.8)
             : .spring(response: 0.45, dampingFraction: 1.0)
+    }
+
+    private var collapsedHoverAnimation: Animation {
+        panelManager.isCollapsedHovered
+            ? .spring(response: 0.36, dampingFraction: 0.74)
+            : .spring(response: 0.28, dampingFraction: 0.96)
     }
 
     private var sideWidth: CGFloat {
@@ -87,8 +104,13 @@ struct NotchContentView: View {
         VStack(spacing: 0) {
             notchLayout
         }
-        .padding(.horizontal, isExpanded ? cornerRadiusInsets.opened.top : cornerRadiusInsets.closed.bottom)
-        .padding(.bottom, isExpanded ? 12 : 0)
+        .padding(
+            .horizontal,
+            isExpanded
+                ? cornerRadiusInsets.opened.top
+                : cornerRadiusInsets.closed.bottom + collapsedHoverHorizontalInset
+        )
+        .padding(.bottom, isExpanded ? 12 : collapsedHoverBottomInset)
         .background {
             ZStack(alignment: .top) {
                 Color.black
@@ -131,12 +153,15 @@ struct NotchContentView: View {
         }
         .clipShape(notchClipShape)
         .shadow(
-            color: isExpanded ? .black.opacity(0.7) : .clear,
+            color: isExpanded
+                ? .black.opacity(0.7)
+                : (panelManager.isCollapsedHovered ? .black.opacity(0.3) : .clear),
             radius: 6
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .animation(panelAnimation, value: isExpanded)
         .animation(.easeInOut(duration: 0.18), value: collapsedMode)
+        .animation(collapsedHoverAnimation, value: panelManager.isCollapsedHovered)
         .onReceive(NotificationCenter.default.publisher(for: .notchiShouldCollapse)) { _ in
             panelManager.collapse()
         }

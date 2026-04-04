@@ -12,6 +12,14 @@ final class NotchPanelManagerTests: XCTestCase {
         }
     }
 
+    private final class MouseLocationBox {
+        var value: CGPoint
+
+        init(_ value: CGPoint) {
+            self.value = value
+        }
+    }
+
     private var defaultsSuiteNames: [String] = []
 
     override func tearDown() {
@@ -100,7 +108,7 @@ final class NotchPanelManagerTests: XCTestCase {
         XCTAssertEqual(manager.collapsedMode, .compactIdle)
     }
 
-    func testCompactHoverEntersPreviewImmediatelyAndReturnsAfterDelay() async {
+    func testCompactHoverExpansionStartsImmediatelyAndReturnsAfterDelay() async {
         let defaults = makeDefaults()
         defaults.set(true, forKey: AppSettings.minimizeWhenIdleKey)
         let sessionCount = SessionCountBox(0)
@@ -112,19 +120,32 @@ final class NotchPanelManagerTests: XCTestCase {
 
         configureGeometry(for: manager)
         XCTAssertEqual(manager.collapsedMode, .compactIdle)
+        XCTAssertFalse(manager.isCollapsedHovered)
 
         manager.handleMouseLocationChanged(compactHoverPoint(for: manager))
-        XCTAssertEqual(manager.collapsedMode, .compactHoverPreview)
-        XCTAssertEqual(manager.activeCollapsedRect.width, manager.notchRect.width, accuracy: 0.5)
+        XCTAssertEqual(manager.collapsedMode, .compactIdle)
+        XCTAssertTrue(manager.isCollapsedHovered)
+        XCTAssertEqual(
+            manager.activeCollapsedRect.width,
+            manager.compactNotchRect.width + (NotchPanelManager.collapsedHoverHorizontalInset * 2),
+            accuracy: 0.5
+        )
+        XCTAssertEqual(
+            manager.activeCollapsedRect.height,
+            manager.compactNotchRect.height + NotchPanelManager.collapsedHoverBottomInset,
+            accuracy: 0.5
+        )
 
         manager.handleMouseLocationChanged(outsideNotchPoint(for: manager))
         try? await Task.sleep(for: .milliseconds(30))
 
         XCTAssertEqual(manager.collapsedMode, .compactIdle)
+        XCTAssertFalse(manager.isCollapsedHovered)
         XCTAssertEqual(manager.activeCollapsedRect.width, manager.compactNotchRect.width, accuracy: 0.5)
+        XCTAssertEqual(manager.activeCollapsedRect.height, manager.compactNotchRect.height, accuracy: 0.5)
     }
 
-    func testMouseMovementOutsideCompactIdleDoesNotEnterPreview() async {
+    func testMouseMovementOutsideCompactIdleDoesNotEnterHoverExpansion() async {
         let defaults = makeDefaults()
         defaults.set(true, forKey: AppSettings.minimizeWhenIdleKey)
         let sessionCount = SessionCountBox(0)
@@ -136,27 +157,105 @@ final class NotchPanelManagerTests: XCTestCase {
         manager.handleMouseLocationChanged(CGPoint(x: 0, y: 0))
 
         XCTAssertEqual(manager.collapsedMode, .compactIdle)
+        XCTAssertFalse(manager.isCollapsedHovered)
         XCTAssertEqual(manager.activeCollapsedRect.width, manager.compactNotchRect.width, accuracy: 0.5)
     }
 
-    func testDisablingMinimizeWhenIdleFromHoverPreviewReturnsToNormalCollapsed() async {
+    func testNormalCollapsedHoverExpansionStartsImmediatelyAndReturnsAfterDelay() async {
+        let defaults = makeDefaults()
+        defaults.set(false, forKey: AppSettings.minimizeWhenIdleKey)
+        let sessionCount = SessionCountBox(0)
+        let manager = makeManager(
+            sessionCount: sessionCount,
+            defaults: defaults,
+            hoverExitDelay: .milliseconds(10)
+        )
+
+        configureGeometry(for: manager)
+        XCTAssertEqual(manager.collapsedMode, .normalCollapsed)
+        XCTAssertFalse(manager.isCollapsedHovered)
+
+        manager.handleMouseLocationChanged(CGPoint(x: manager.notchRect.midX, y: manager.notchRect.midY))
+
+        XCTAssertEqual(manager.collapsedMode, .normalCollapsed)
+        XCTAssertTrue(manager.isCollapsedHovered)
+        XCTAssertEqual(
+            manager.activeCollapsedRect.width,
+            manager.notchRect.width + (NotchPanelManager.collapsedHoverHorizontalInset * 2),
+            accuracy: 0.5
+        )
+        XCTAssertEqual(
+            manager.activeCollapsedRect.height,
+            manager.notchRect.height + NotchPanelManager.collapsedHoverBottomInset,
+            accuracy: 0.5
+        )
+
+        manager.handleMouseLocationChanged(outsideNotchPoint(for: manager))
+        try? await Task.sleep(for: .milliseconds(30))
+
+        XCTAssertEqual(manager.collapsedMode, .normalCollapsed)
+        XCTAssertFalse(manager.isCollapsedHovered)
+        XCTAssertEqual(manager.activeCollapsedRect.width, manager.notchRect.width, accuracy: 0.5)
+        XCTAssertEqual(manager.activeCollapsedRect.height, manager.notchRect.height, accuracy: 0.5)
+    }
+
+    func testDisablingMinimizeWhenIdleFromCollapsedHoverReturnsToNormalCollapsed() async {
         let defaults = makeDefaults()
         defaults.set(true, forKey: AppSettings.minimizeWhenIdleKey)
         let sessionCount = SessionCountBox(0)
-        let manager = makeManager(sessionCount: sessionCount, defaults: defaults)
+        let mouseLocation = MouseLocationBox(.zero)
+        let manager = makeManager(sessionCount: sessionCount, defaults: defaults, mouseLocation: mouseLocation)
 
         configureGeometry(for: manager)
-        manager.handleMouseLocationChanged(compactHoverPoint(for: manager))
-        XCTAssertEqual(manager.collapsedMode, .compactHoverPreview)
+        mouseLocation.value = compactHoverPoint(for: manager)
+        manager.handleMouseLocationChanged(mouseLocation.value)
+        XCTAssertEqual(manager.collapsedMode, .compactIdle)
+        XCTAssertTrue(manager.isCollapsedHovered)
 
         defaults.set(false, forKey: AppSettings.minimizeWhenIdleKey)
         manager.refreshIdleMode()
 
         XCTAssertEqual(manager.collapsedMode, .normalCollapsed)
+        XCTAssertTrue(manager.isCollapsedHovered)
+        XCTAssertEqual(
+            manager.activeCollapsedRect.width,
+            manager.notchRect.width + (NotchPanelManager.collapsedHoverHorizontalInset * 2),
+            accuracy: 0.5
+        )
+        XCTAssertEqual(
+            manager.activeCollapsedRect.height,
+            manager.notchRect.height + NotchPanelManager.collapsedHoverBottomInset,
+            accuracy: 0.5
+        )
+    }
+
+    func testDisablingMinimizeWhenIdleClearsHoverIfMouseAlreadyLeftNotch() async {
+        let defaults = makeDefaults()
+        defaults.set(true, forKey: AppSettings.minimizeWhenIdleKey)
+        let sessionCount = SessionCountBox(0)
+        let mouseLocation = MouseLocationBox(.zero)
+        let manager = makeManager(
+            sessionCount: sessionCount,
+            defaults: defaults,
+            hoverExitDelay: .zero,
+            mouseLocation: mouseLocation
+        )
+
+        configureGeometry(for: manager)
+        mouseLocation.value = compactHoverPoint(for: manager)
+        manager.handleMouseLocationChanged(mouseLocation.value)
+        XCTAssertTrue(manager.isCollapsedHovered)
+
+        mouseLocation.value = outsideNotchPoint(for: manager)
+        defaults.set(false, forKey: AppSettings.minimizeWhenIdleKey)
+        manager.refreshIdleMode()
+
+        XCTAssertEqual(manager.collapsedMode, .normalCollapsed)
+        XCTAssertFalse(manager.isCollapsedHovered)
         XCTAssertEqual(manager.activeCollapsedRect.width, manager.notchRect.width, accuracy: 0.5)
     }
 
-    func testExpandFromCompactHoverPreviewKeepsPanelOpenAndReturnsToCompactIdleOnCollapse() async {
+    func testExpandFromCompactHoverKeepsPanelOpenAndReturnsToCompactIdleOnCollapse() async {
         let defaults = makeDefaults()
         defaults.set(true, forKey: AppSettings.minimizeWhenIdleKey)
         let sessionCount = SessionCountBox(0)
@@ -164,17 +263,20 @@ final class NotchPanelManagerTests: XCTestCase {
 
         configureGeometry(for: manager)
         manager.handleMouseLocationChanged(compactHoverPoint(for: manager))
-        XCTAssertEqual(manager.collapsedMode, .compactHoverPreview)
+        XCTAssertEqual(manager.collapsedMode, .compactIdle)
+        XCTAssertTrue(manager.isCollapsedHovered)
 
         manager.expand()
 
         XCTAssertTrue(manager.isExpanded)
         XCTAssertEqual(manager.collapsedMode, .compactIdle)
+        XCTAssertFalse(manager.isCollapsedHovered)
 
         manager.collapse()
 
         XCTAssertFalse(manager.isExpanded)
         XCTAssertEqual(manager.collapsedMode, .compactIdle)
+        XCTAssertFalse(manager.isCollapsedHovered)
     }
 
     private func makeDefaults() -> UserDefaults {
@@ -204,13 +306,15 @@ final class NotchPanelManagerTests: XCTestCase {
     private func makeManager(
         sessionCount: SessionCountBox,
         defaults: UserDefaults,
-        hoverExitDelay: Duration = .milliseconds(10)
+        hoverExitDelay: Duration = .milliseconds(10),
+        mouseLocation: MouseLocationBox? = nil
     ) -> NotchPanelManager {
         NotchPanelManager(
             notificationCenter: NotificationCenter(),
             userDefaults: defaults,
             hoverExitDelay: hoverExitDelay,
             activeSessionCountProvider: { sessionCount.value },
+            mouseLocationProvider: { mouseLocation?.value ?? .zero },
             startEventMonitors: false,
             observeExternalState: false
         )
