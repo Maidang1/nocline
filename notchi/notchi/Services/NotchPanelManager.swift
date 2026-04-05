@@ -93,9 +93,11 @@ final class NotchPanelManager {
         refreshIdleMode()
     }
 
-    isolated deinit {
-        observerTokens.forEach { notificationCenter.removeObserver($0) }
-        pendingHoverExitTask?.cancel()
+    deinit {
+        MainActor.assumeIsolated {
+            observerTokens.forEach { notificationCenter.removeObserver($0) }
+            pendingHoverExitTask?.cancel()
+        }
     }
 
     func updateGeometry(for screen: NSScreen) {
