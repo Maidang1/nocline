@@ -346,7 +346,10 @@ struct NotchContentView: View {
             PanelHeaderButton(
                 sfSymbol: "gearshape",
                 showsIndicator: updateManager.hasPendingUpdate,
-                action: { showingPanelSettings = true }
+                action: {
+                    haptics.playNavigationTap()
+                    showingPanelSettings = true
+                }
             )
             PanelHeaderButton(sfSymbol: "xmark", action: { panelManager.collapse() })
         }

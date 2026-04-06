@@ -203,7 +203,7 @@ final class NotchPanelManager {
     }
 
     func refreshIdleMode() {
-        cachedShouldUseCompactIdle = userDefaults.bool(forKey: AppSettings.minimizeWhenIdleKey)
+        cachedShouldUseCompactIdle = userDefaults.bool(forKey: AppSettings.hideSpriteWhenIdleKey)
             && activeSessionCountProvider() == 0
 
         if !cachedShouldUseCompactIdle {

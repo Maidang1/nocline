@@ -38,9 +38,9 @@ final class NotchPanelManagerTests: XCTestCase {
         super.tearDown()
     }
 
-    func testMinimizeWhenIdleOffKeepsNormalCollapsedWithNoSessions() async {
+    func testHideSpriteWhenIdleOffKeepsNormalCollapsedWithNoSessions() async {
         let defaults = makeDefaults()
-        defaults.set(false, forKey: AppSettings.minimizeWhenIdleKey)
+        defaults.set(false, forKey: AppSettings.hideSpriteWhenIdleKey)
         let sessionCount = SessionCountBox(0)
         let manager = makeManager(sessionCount: sessionCount, defaults: defaults)
 
@@ -50,9 +50,9 @@ final class NotchPanelManagerTests: XCTestCase {
         XCTAssertEqual(manager.activeCollapsedRect.width, manager.notchRect.width, accuracy: 0.5)
     }
 
-    func testMinimizeWhenIdleOnWithNoSessionsEntersCompactIdle() async {
+    func testHideSpriteWhenIdleOnWithNoSessionsEntersCompactIdle() async {
         let defaults = makeDefaults()
-        defaults.set(true, forKey: AppSettings.minimizeWhenIdleKey)
+        defaults.set(true, forKey: AppSettings.hideSpriteWhenIdleKey)
         let sessionCount = SessionCountBox(0)
         let manager = makeManager(sessionCount: sessionCount, defaults: defaults)
 
@@ -65,7 +65,7 @@ final class NotchPanelManagerTests: XCTestCase {
 
     func testFirstSessionStartExitsCompactIdle() async {
         let defaults = makeDefaults()
-        defaults.set(true, forKey: AppSettings.minimizeWhenIdleKey)
+        defaults.set(true, forKey: AppSettings.hideSpriteWhenIdleKey)
         let sessionCount = SessionCountBox(0)
         let manager = makeManager(sessionCount: sessionCount, defaults: defaults)
 
@@ -81,7 +81,7 @@ final class NotchPanelManagerTests: XCTestCase {
 
     func testLastSessionEndReturnsToCompactIdleWhenCollapsed() async {
         let defaults = makeDefaults()
-        defaults.set(true, forKey: AppSettings.minimizeWhenIdleKey)
+        defaults.set(true, forKey: AppSettings.hideSpriteWhenIdleKey)
         let sessionCount = SessionCountBox(1)
         let manager = makeManager(sessionCount: sessionCount, defaults: defaults)
 
@@ -96,7 +96,7 @@ final class NotchPanelManagerTests: XCTestCase {
 
     func testLastSessionEndWhileExpandedLeavesPanelOpenUntilCollapse() async {
         let defaults = makeDefaults()
-        defaults.set(true, forKey: AppSettings.minimizeWhenIdleKey)
+        defaults.set(true, forKey: AppSettings.hideSpriteWhenIdleKey)
         let sessionCount = SessionCountBox(1)
         let manager = makeManager(sessionCount: sessionCount, defaults: defaults)
 
@@ -118,7 +118,7 @@ final class NotchPanelManagerTests: XCTestCase {
 
     func testCompactHoverExpansionStartsImmediatelyAndReturnsAfterDelay() async {
         let defaults = makeDefaults()
-        defaults.set(true, forKey: AppSettings.minimizeWhenIdleKey)
+        defaults.set(true, forKey: AppSettings.hideSpriteWhenIdleKey)
         let sessionCount = SessionCountBox(0)
         let manager = makeManager(
             sessionCount: sessionCount,
@@ -155,7 +155,7 @@ final class NotchPanelManagerTests: XCTestCase {
 
     func testMouseMovementOutsideCompactIdleDoesNotEnterHoverExpansion() async {
         let defaults = makeDefaults()
-        defaults.set(true, forKey: AppSettings.minimizeWhenIdleKey)
+        defaults.set(true, forKey: AppSettings.hideSpriteWhenIdleKey)
         let sessionCount = SessionCountBox(0)
         let manager = makeManager(sessionCount: sessionCount, defaults: defaults)
 
@@ -171,7 +171,7 @@ final class NotchPanelManagerTests: XCTestCase {
 
     func testNormalCollapsedHoverExpansionStartsImmediatelyAndReturnsAfterDelay() async {
         let defaults = makeDefaults()
-        defaults.set(false, forKey: AppSettings.minimizeWhenIdleKey)
+        defaults.set(false, forKey: AppSettings.hideSpriteWhenIdleKey)
         let sessionCount = SessionCountBox(0)
         let manager = makeManager(
             sessionCount: sessionCount,
@@ -207,9 +207,9 @@ final class NotchPanelManagerTests: XCTestCase {
         XCTAssertEqual(manager.activeCollapsedRect.height, manager.notchRect.height, accuracy: 0.5)
     }
 
-    func testDisablingMinimizeWhenIdleFromCollapsedHoverReturnsToNormalCollapsed() async {
+    func testDisablingHideSpriteWhenIdleFromCollapsedHoverReturnsToNormalCollapsed() async {
         let defaults = makeDefaults()
-        defaults.set(true, forKey: AppSettings.minimizeWhenIdleKey)
+        defaults.set(true, forKey: AppSettings.hideSpriteWhenIdleKey)
         let sessionCount = SessionCountBox(0)
         let mouseLocation = MouseLocationBox(.zero)
         let manager = makeManager(sessionCount: sessionCount, defaults: defaults, mouseLocation: mouseLocation)
@@ -220,7 +220,7 @@ final class NotchPanelManagerTests: XCTestCase {
         XCTAssertEqual(manager.collapsedMode, .compactIdle)
         XCTAssertTrue(manager.isCollapsedHovered)
 
-        defaults.set(false, forKey: AppSettings.minimizeWhenIdleKey)
+        defaults.set(false, forKey: AppSettings.hideSpriteWhenIdleKey)
         manager.refreshIdleMode()
 
         XCTAssertEqual(manager.collapsedMode, .normalCollapsed)
@@ -237,9 +237,9 @@ final class NotchPanelManagerTests: XCTestCase {
         )
     }
 
-    func testDisablingMinimizeWhenIdleClearsHoverIfMouseAlreadyLeftNotch() async {
+    func testDisablingHideSpriteWhenIdleClearsHoverIfMouseAlreadyLeftNotch() async {
         let defaults = makeDefaults()
-        defaults.set(true, forKey: AppSettings.minimizeWhenIdleKey)
+        defaults.set(true, forKey: AppSettings.hideSpriteWhenIdleKey)
         let sessionCount = SessionCountBox(0)
         let mouseLocation = MouseLocationBox(.zero)
         let manager = makeManager(
@@ -255,7 +255,7 @@ final class NotchPanelManagerTests: XCTestCase {
         XCTAssertTrue(manager.isCollapsedHovered)
 
         mouseLocation.value = outsideNotchPoint(for: manager)
-        defaults.set(false, forKey: AppSettings.minimizeWhenIdleKey)
+        defaults.set(false, forKey: AppSettings.hideSpriteWhenIdleKey)
         manager.refreshIdleMode()
 
         XCTAssertEqual(manager.collapsedMode, .normalCollapsed)
@@ -265,7 +265,7 @@ final class NotchPanelManagerTests: XCTestCase {
 
     func testExpandFromCompactHoverKeepsPanelOpenAndReturnsToCompactIdleOnCollapse() async {
         let defaults = makeDefaults()
-        defaults.set(true, forKey: AppSettings.minimizeWhenIdleKey)
+        defaults.set(true, forKey: AppSettings.hideSpriteWhenIdleKey)
         let sessionCount = SessionCountBox(0)
         let manager = makeManager(sessionCount: sessionCount, defaults: defaults)
 
@@ -289,7 +289,7 @@ final class NotchPanelManagerTests: XCTestCase {
 
     func testCollapsedHoverEnterFeedbackFiresOnlyOnDistinctEntries() async {
         let defaults = makeDefaults()
-        defaults.set(false, forKey: AppSettings.minimizeWhenIdleKey)
+        defaults.set(false, forKey: AppSettings.hideSpriteWhenIdleKey)
         let sessionCount = SessionCountBox(0)
         let feedback = HoverFeedbackBox()
         let manager = makeManager(
@@ -317,7 +317,7 @@ final class NotchPanelManagerTests: XCTestCase {
 
     func testPinToggleFeedbackFiresForEachToggle() async {
         let defaults = makeDefaults()
-        defaults.set(false, forKey: AppSettings.minimizeWhenIdleKey)
+        defaults.set(false, forKey: AppSettings.hideSpriteWhenIdleKey)
         let sessionCount = SessionCountBox(0)
         let feedback = PinFeedbackBox()
         let manager = makeManager(

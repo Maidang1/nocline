@@ -30,4 +30,8 @@ final class HapticService {
     func playSessionSelection() {
         NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
     }
+
+    func playNavigationTap() {
+        NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
+    }
 }
