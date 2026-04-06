@@ -154,6 +154,13 @@ final class SocketServerTests: XCTestCase {
         XCTAssertTrue(duplicateSnapshot.isEmpty, "Duplicate server should not steal the socket path")
     }
 
+    func testSocketUsesUserOnlyPermissions() async throws {
+        let recorder = EventRecorder()
+        let (_, path) = try await makeServer(clientReadTimeout: 0.5, recorder: recorder)
+
+        XCTAssertEqual(try socketPermissions(at: path), 0o600)
+    }
+
     private func makeServer(
         at path: String? = nil,
         clientReadTimeout: TimeInterval,
@@ -197,6 +204,19 @@ final class SocketServerTests: XCTestCase {
             "tty": NSNull(),
         ]
         return try JSONSerialization.data(withJSONObject: payload)
+    }
+
+    private func socketPermissions(at path: String) throws -> Int {
+        var fileStatus = stat()
+        let result = lstat(path, &fileStatus)
+        guard result == 0 else {
+            throw NSError(
+                domain: NSPOSIXErrorDomain,
+                code: Int(errno),
+                userInfo: [NSLocalizedDescriptionKey: "Failed to inspect socket permissions at \(path)"]
+            )
+        }
+        return Int(fileStatus.st_mode & 0o777)
     }
 
     private func waitUntil(

@@ -222,6 +222,33 @@ final class ClaudeUsageServiceTests: XCTestCase {
         XCTAssertEqual(scheduler.intervals, [120])
     }
 
+    func testStoppedPollingDropsAlreadyFiredTimerCallbackBeforeFetchStarts() async throws {
+        let scheduler = PollSchedulerSpy()
+        let recorder = RequestRecorder()
+        let dependencies = makeDependencies(
+            scheduler: scheduler,
+            resolveUserAgent: { "claude-code/2.1.77" },
+            getCachedOAuthToken: { _ in "token" },
+            fetchUsage: { request in
+                recorder.record(request)
+                return (self.makeSuccessPayload(utilization: 42), self.makeResponse(statusCode: 200))
+            }
+        )
+
+        let service = ClaudeUsageService(dependencies: dependencies)
+        service.startPolling()
+        await Task.yield()
+        await Task.yield()
+
+        recorder.reset()
+        scheduler.fireLast()
+        service.stopPolling()
+        await Task.yield()
+        await Task.yield()
+
+        XCTAssertTrue(recorder.paths.isEmpty)
+    }
+
     func testExpiredPersistedRecoveryStateIsClearedAndLiveFetchRuns() async throws {
         let scheduler = PollSchedulerSpy()
         let now = Date(timeIntervalSince1970: 100)

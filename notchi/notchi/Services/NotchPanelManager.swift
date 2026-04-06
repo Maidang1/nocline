@@ -250,25 +250,34 @@ final class NotchPanelManager {
     }
 
     private func setupEventMonitors() {
-        mouseDownMonitor = EventMonitor(mask: .leftMouseDown) { [weak self] _ in
+        mouseDownMonitor = EventMonitor(mask: .leftMouseDown) { [weak self] event in
+            let location = Self.screenLocation(from: event)
             Task { @MainActor in
-                self?.handleMouseDown()
+                self?.handleMouseDown(at: location)
             }
         }
         mouseDownMonitor?.start()
 
         mouseMoveMonitor = EventMonitor(mask: [.mouseMoved, .leftMouseDragged, .rightMouseDragged, .otherMouseDragged]) { [weak self] _ in
-            let location = NSEvent.mouseLocation
-            Task { @MainActor in
-                self?.handleMouseLocationChanged(location)
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.handleMouseLocationChanged(self.mouseLocationProvider())
             }
         }
         mouseMoveMonitor?.start()
     }
 
-    private func handleMouseDown() {
-        let location = NSEvent.mouseLocation
+    private static func screenLocation(from event: NSEvent) -> CGPoint {
+        if let window = event.window {
+            return window.convertPoint(toScreen: event.locationInWindow)
+        }
+        if let cgEvent = event.cgEvent {
+            return cgEvent.unflippedLocation
+        }
+        return NSEvent.mouseLocation
+    }
 
+    private func handleMouseDown(at location: CGPoint) {
         if isExpanded {
             if !isPinned && !panelRect.contains(location) {
                 collapse()
@@ -277,6 +286,12 @@ final class NotchPanelManager {
             expand()
         }
     }
+
+#if DEBUG
+    func handleMouseDownForTesting(at location: CGPoint) {
+        handleMouseDown(at: location)
+    }
+#endif
 
     private func scheduleHoverExit() {
         cancelPendingHoverExitTask()

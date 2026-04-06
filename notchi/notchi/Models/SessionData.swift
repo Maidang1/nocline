@@ -100,16 +100,42 @@ final class SessionData: Identifiable {
     }
 
     private static func resolveXPosition(hash: UInt, existingPositions: [CGFloat]) -> CGFloat {
-        var candidate = xPositionMin + CGFloat(hash % 900) / 1000.0
+        let initialCandidate = xPositionMin + CGFloat(hash % 900) / 1000.0
+        var bestCandidate = initialCandidate
+        var bestMinimumSeparation = minimumSeparation(for: initialCandidate, existingPositions: existingPositions)
 
-        for _ in 0..<xCollisionRetries {
-            let tooClose = existingPositions.contains { abs($0 - candidate) < xMinSeparation }
-            if !tooClose { break }
-            candidate = (candidate + xNudgeStep).truncatingRemainder(dividingBy: xPositionRange) + xPositionMin
+        for attempt in 0...xCollisionRetries {
+            let candidate = wrappedXPosition(initialCandidate + (CGFloat(attempt) * xNudgeStep))
+            let minimumSeparation = minimumSeparation(for: candidate, existingPositions: existingPositions)
+
+            if minimumSeparation >= xMinSeparation {
+                return candidate
+            }
+
+            if minimumSeparation > bestMinimumSeparation {
+                bestCandidate = candidate
+                bestMinimumSeparation = minimumSeparation
+            }
         }
 
-        return candidate
+        return bestCandidate
     }
+
+    private static func wrappedXPosition(_ value: CGFloat) -> CGFloat {
+        let offset = (value - xPositionMin).truncatingRemainder(dividingBy: xPositionRange)
+        let normalizedOffset = offset >= 0 ? offset : offset + xPositionRange
+        return normalizedOffset + xPositionMin
+    }
+
+    private static func minimumSeparation(for candidate: CGFloat, existingPositions: [CGFloat]) -> CGFloat {
+        existingPositions.map { abs($0 - candidate) }.min() ?? .greatestFiniteMagnitude
+    }
+
+#if DEBUG
+    static func resolveXPositionForTesting(hash: UInt, existingPositions: [CGFloat]) -> CGFloat {
+        resolveXPosition(hash: hash, existingPositions: existingPositions)
+    }
+#endif
 
     private static func resolveYOffset(hash: UInt) -> CGFloat {
         let yBits = (hash >> 8) & 0xFF

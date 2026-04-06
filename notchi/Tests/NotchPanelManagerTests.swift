@@ -335,6 +335,37 @@ final class NotchPanelManagerTests: XCTestCase {
         XCTAssertEqual(feedback.count, 2)
     }
 
+    func testHandleMouseDownUsesProvidedClickLocationToExpand() async {
+        let defaults = makeDefaults()
+        defaults.set(false, forKey: AppSettings.hideSpriteWhenIdleKey)
+        let sessionCount = SessionCountBox(0)
+        let mouseLocation = MouseLocationBox(CGPoint(x: 0, y: 0))
+        let manager = makeManager(sessionCount: sessionCount, defaults: defaults, mouseLocation: mouseLocation)
+
+        configureGeometry(for: manager)
+
+        manager.handleMouseDownForTesting(at: CGPoint(x: manager.notchRect.midX, y: manager.notchRect.midY))
+
+        XCTAssertTrue(manager.isExpanded)
+    }
+
+    func testHandleMouseDownUsesProvidedClickLocationToCollapse() async {
+        let defaults = makeDefaults()
+        defaults.set(false, forKey: AppSettings.hideSpriteWhenIdleKey)
+        let sessionCount = SessionCountBox(0)
+        let mouseLocation = MouseLocationBox(CGPoint(x: 0, y: 0))
+        let manager = makeManager(sessionCount: sessionCount, defaults: defaults, mouseLocation: mouseLocation)
+
+        configureGeometry(for: manager)
+        manager.expand()
+
+        manager.handleMouseDownForTesting(
+            at: CGPoint(x: manager.panelRect.maxX + 20, y: manager.panelRect.maxY + 20)
+        )
+
+        XCTAssertFalse(manager.isExpanded)
+    }
+
     private func makeDefaults() -> UserDefaults {
         let suiteName = "NotchPanelManagerTests-\(UUID().uuidString)"
         defaultsSuiteNames.append(suiteName)
