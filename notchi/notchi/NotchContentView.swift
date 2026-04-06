@@ -66,6 +66,12 @@ struct NotchContentView: View {
     private var isExpanded: Bool { panelManager.isExpanded }
     private var collapsedMode: NotchPanelManager.CollapsedMode { panelManager.collapsedMode }
     private var isCompactIdle: Bool { !isExpanded && collapsedMode == .compactIdle }
+    private var collapsedHeaderState: NotchiState? {
+        Self.collapsedHeaderState(
+            activeSessionState: activeSession?.state,
+            isCompactIdle: isCompactIdle
+        )
+    }
     private var collapsedHoverHorizontalInset: CGFloat {
         !isExpanded && panelManager.isCollapsedHovered
             ? NotchPanelManager.collapsedHoverHorizontalInset
@@ -412,13 +418,18 @@ struct NotchContentView: View {
 
     @ViewBuilder
     private var headerSprites: some View {
-        if let activeSession {
+        if let collapsedHeaderState {
             SessionSpriteView(
-                state: activeSession.state,
+                state: collapsedHeaderState,
                 isSelected: true
             )
             .scaleEffect(displayedCollapsedHeaderSpriteScale, anchor: .bottom)
         }
+    }
+
+    static func collapsedHeaderState(activeSessionState: NotchiState?, isCompactIdle: Bool) -> NotchiState? {
+        guard !isCompactIdle else { return nil }
+        return activeSessionState ?? .idle
     }
 
     private func startSpriteHandoff(for expanded: Bool) {
