@@ -1357,7 +1357,7 @@ final class ClaudeUsageServiceTests: XCTestCase {
         await Task.yield()
 
         XCTAssertTrue(AppSettings.isUsageEnabled)
-        XCTAssertEqual(service.error, "Start a Claude Code session to refresh credentials")
+        XCTAssertEqual(service.error, "Start a Claude Code session to track usage")
         XCTAssertEqual(service.recoveryAction, .waitForClaudeCode)
         XCTAssertTrue(scheduler.intervals.isEmpty)
     }
@@ -1494,7 +1494,7 @@ final class ClaudeUsageServiceTests: XCTestCase {
         await Task.yield()
 
         XCTAssertNil(service.error)
-        XCTAssertEqual(service.statusMessage, "Start a Claude Code session to refresh credentials")
+        XCTAssertEqual(service.statusMessage, "Start a Claude Code session to track usage")
         XCTAssertTrue(service.isUsageStale)
         XCTAssertEqual(service.recoveryAction, .waitForClaudeCode)
         XCTAssertEqual(service.currentUsage?.usagePercentage, 55)
@@ -1523,7 +1523,7 @@ final class ClaudeUsageServiceTests: XCTestCase {
         let service = ClaudeUsageService(dependencies: dependencies)
         AppSettings.isUsageEnabled = true
         service.recoveryAction = .waitForClaudeCode
-        service.error = "Start a Claude Code session to refresh credentials"
+        service.error = "Start a Claude Code session to track usage"
 
         service.handleClaudeResumeTrigger(.sessionStart)
 
@@ -1701,7 +1701,7 @@ final class ClaudeUsageServiceTests: XCTestCase {
         let service = ClaudeUsageService(dependencies: dependencies)
         AppSettings.isUsageEnabled = true
         service.recoveryAction = .waitForClaudeCode
-        service.error = "Start a Claude Code session to refresh credentials"
+        service.error = "Start a Claude Code session to track usage"
 
         service.handleClaudeResumeTrigger(.sessionStart)
         XCTAssertEqual(scheduler.intervals, [2])
@@ -1826,7 +1826,7 @@ final class ClaudeUsageServiceTests: XCTestCase {
 
         XCTAssertEqual(clearCachedTokenCalls, 1)
         XCTAssertNil(service.currentUsage)
-        XCTAssertEqual(service.error, "Start a Claude Code session to refresh credentials")
+        XCTAssertEqual(service.error, "Start a Claude Code session to track usage")
         XCTAssertNil(service.statusMessage)
         XCTAssertEqual(service.recoveryAction, .waitForClaudeCode)
         XCTAssertTrue(scheduler.intervals.isEmpty)
@@ -1928,7 +1928,7 @@ final class ClaudeUsageServiceTests: XCTestCase {
         XCTAssertEqual(refreshCalls, 1)
         XCTAssertFalse(fetchCalled)
         XCTAssertNil(service.currentUsage)
-        XCTAssertEqual(service.error, "Start a Claude Code session to refresh credentials")
+        XCTAssertEqual(service.error, "Start a Claude Code session to track usage")
         XCTAssertEqual(service.recoveryAction, .waitForClaudeCode)
         XCTAssertTrue(scheduler.intervals.isEmpty)
     }

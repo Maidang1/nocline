@@ -1175,7 +1175,7 @@ final class ClaudeUsageService {
                 return .handled
             }
 
-            presentWaitForClaudeCode(message: "Start a Claude Code session to refresh credentials")
+            presentWaitForClaudeCode(message: "Start a Claude Code session to track usage")
             stopPolling()
             return .handled
         }
@@ -1204,7 +1204,7 @@ final class ClaudeUsageService {
             logger.info("Claude Code credential metadata is still expired after OAuth 401")
         }
 
-        return .waitForClaudeCode("Start a Claude Code session to refresh credentials")
+        return .waitForClaudeCode("Start a Claude Code session to track usage")
     }
 
     private func recoverFromEmptyHeadersFallback(afterOAuth403With currentToken: String, userInitiated: Bool) async {

@@ -169,12 +169,21 @@ struct ExpandedPanelView: View {
         GeometryReader { geometry in
             ZStack {
                 if !showingSettings {
-                    if shouldShowSessionPicker {
-                        sessionPickerContent(geometry: geometry)
-                            .transition(primaryContentTransition)
-                    } else {
-                        activityContent(geometry: geometry)
-                            .transition(primaryContentTransition)
+                    VStack(alignment: .leading, spacing: 0) {
+                        ZStack {
+                            if shouldShowSessionPicker {
+                                sessionPickerContent(geometry: geometry)
+                                    .transition(primaryContentTransition)
+                            } else {
+                                activityContent(geometry: geometry)
+                                    .transition(primaryContentTransition)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+
+                        sharedUsageBar
+                            .padding(.horizontal, 12)
+                            .padding(.bottom, 5)
                     }
                 }
 
@@ -224,21 +233,9 @@ struct ExpandedPanelView: View {
                 }
 
                 Spacer()
-
-                UsageBarView(
-                    usage: usageService.currentUsage,
-                    isLoading: usageService.isLoading,
-                    error: usageService.error,
-                    statusMessage: usageService.statusMessage,
-                    isStale: usageService.isUsageStale,
-                    recoveryAction: usageService.recoveryAction,
-                    onConnect: { ClaudeUsageService.shared.connectAndStartPolling() },
-                    onRetry: { ClaudeUsageService.shared.retryNow() }
-                )
             }
             .padding(.horizontal, 12)
         }
-        .padding(.bottom, 5)
         .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
@@ -270,23 +267,25 @@ struct ExpandedPanelView: View {
                 if showIndicator && !isActivityCollapsed {
                     WorkingIndicatorView(state: state)
                 }
-
-                UsageBarView(
-                    usage: usageService.currentUsage,
-                    isLoading: usageService.isLoading,
-                    error: usageService.error,
-                    statusMessage: usageService.statusMessage,
-                    isStale: usageService.isUsageStale,
-                    recoveryAction: usageService.recoveryAction,
-                    compact: isActivityCollapsed,
-                    onConnect: { ClaudeUsageService.shared.connectAndStartPolling() },
-                    onRetry: { ClaudeUsageService.shared.retryNow() }
-                )
             }
             .padding(.horizontal, 12)
         }
-        .padding(.bottom, 5)
         .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    @ViewBuilder
+    private var sharedUsageBar: some View {
+        UsageBarView(
+            usage: usageService.currentUsage,
+            isLoading: usageService.isLoading,
+            error: usageService.error,
+            statusMessage: usageService.statusMessage,
+            isStale: usageService.isUsageStale,
+            recoveryAction: usageService.recoveryAction,
+            compact: !shouldShowSessionPicker && isActivityCollapsed,
+            onConnect: { ClaudeUsageService.shared.connectAndStartPolling() },
+            onRetry: { ClaudeUsageService.shared.retryNow() }
+        )
     }
 
     private var activitySection: some View {
