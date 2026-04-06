@@ -404,6 +404,7 @@ final class ClaudeUsageService {
     private var pollTimer: (any ClaudeUsagePollTimer)?
     private var pendingResumeReconnectTimer: (any ClaudeUsagePollTimer)?
     private let pollInterval: TimeInterval = 60
+    private var pollScheduleGeneration: UInt64 = 0
     private var consecutiveRateLimits = 0
     private var cachedToken: String?
     private var preferHeadersFallback = false
@@ -635,6 +636,7 @@ final class ClaudeUsageService {
     func stopPolling() {
         pollTimer?.invalidate()
         pollTimer = nil
+        pollScheduleGeneration &+= 1
         clearPendingResumeReconnect()
     }
 
@@ -643,9 +645,12 @@ final class ClaudeUsageService {
         let baseInterval = interval ?? pollInterval
         let jitter = dependencies.pollJitter()
         let effectiveInterval = max(10, baseInterval + jitter, minimumInterval ?? 0)
+        pollScheduleGeneration &+= 1
+        let generation = pollScheduleGeneration
         pollTimer = dependencies.schedulePoll(effectiveInterval) { [weak self] in
             Task { @MainActor [weak self] in
-                await self?.fetchUsage()
+                guard let self, self.pollScheduleGeneration == generation else { return }
+                await self.fetchUsage()
             }
         }
         logger.info("Next usage poll in \(Int(effectiveInterval))s")

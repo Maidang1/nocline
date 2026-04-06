@@ -59,6 +59,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate, SP
         false
     }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        SocketServer.shared.stop()
+        ClaudeUsageService.shared.stopPolling()
+    }
+
     @MainActor private func setupNotchWindow() {
         ScreenSelector.shared.refreshScreens()
         guard let screen = ScreenSelector.shared.selectedScreen else { return }
