@@ -33,6 +33,7 @@ final class SessionData: Identifiable {
     private(set) var promptSubmitTime: Date?
     private(set) var permissionMode: String = "default"
     private(set) var pendingQuestions: [PendingQuestion] = []
+    private(set) var currentSpinnerVerb: String = SpinnerVerbs.randomWorkingVerb()
 
     private var durationTimer: Task<Void, Never>?
     private var sleepTimer: Task<Void, Never>?
@@ -158,6 +159,10 @@ final class SessionData: Identifiable {
         promptSubmitTime = now
         lastActivity = now
         logger.debug("Setting promptSubmitTime to: \(now)")
+    }
+
+    func advanceSpinnerVerbForReply() {
+        currentSpinnerVerb = SpinnerVerbs.nextWorkingVerb(after: currentSpinnerVerb)
     }
 
     func updatePermissionMode(_ mode: String) {

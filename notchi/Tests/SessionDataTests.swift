@@ -26,4 +26,19 @@ final class SessionDataTests: XCTestCase {
 
         XCTAssertEqual(resolved, CGFloat(0.28), accuracy: 0.0001)
     }
+
+    func testSpinnerVerbOnlyAdvancesWhenReplyCycleAdvances() {
+        let session = SessionData(sessionId: "session-1", cwd: "/tmp/project", sessionNumber: 1)
+        let initialVerb = session.currentSpinnerVerb
+
+        session.recordPreToolUse(tool: "Read", toolInput: ["file_path": "README.md"], toolUseId: "tool-1")
+        session.recordPostToolUse(tool: "Read", toolUseId: "tool-1", success: true)
+
+        XCTAssertEqual(session.currentSpinnerVerb, initialVerb)
+
+        session.advanceSpinnerVerbForReply()
+
+        XCTAssertNotEqual(session.currentSpinnerVerb, initialVerb)
+        XCTAssertTrue(SpinnerVerbs.all.contains(session.currentSpinnerVerb))
+    }
 }

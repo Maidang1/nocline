@@ -111,6 +111,10 @@ struct ExpandedPanelView: View {
         effectiveSession?.state ?? .idle
     }
 
+    private var currentSpinnerVerb: String {
+        effectiveSession?.currentSpinnerVerb ?? SpinnerVerbs.defaultVerb
+    }
+
     private var showIndicator: Bool {
         state.task == .working || state.task == .compacting || state.task == .waiting
     }
@@ -265,7 +269,7 @@ struct ExpandedPanelView: View {
                 }
 
                 if showIndicator && !isActivityCollapsed {
-                    WorkingIndicatorView(state: state)
+                    WorkingIndicatorView(state: state, workingVerb: currentSpinnerVerb)
                 }
             }
             .padding(.horizontal, 12)

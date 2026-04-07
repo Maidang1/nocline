@@ -74,6 +74,7 @@ final class SessionStore {
             if Self.isLocalSlashCommand(event.userPrompt) {
                 session.updateTask(.idle)
             } else {
+                session.advanceSpinnerVerbForReply()
                 session.updateTask(.working)
             }
 

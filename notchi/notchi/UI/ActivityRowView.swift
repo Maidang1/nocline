@@ -176,6 +176,7 @@ struct QuestionPromptView: View {
 
 struct WorkingIndicatorView: View {
     let state: NotchiState
+    let workingVerb: String
     @State private var dotCount = 1
     @State private var symbolPhase = 0
 
@@ -191,7 +192,7 @@ struct WorkingIndicatorView: View {
         switch state.task {
         case .compacting: return "Compacting"
         case .waiting:    return "Waiting"
-        default:          return "Clanking"
+        default:          return workingVerb
         }
     }
 
