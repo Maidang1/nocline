@@ -14,7 +14,8 @@ final class ConversationParserTests: XCTestCase {
     }
 
     override func tearDown() async throws {
-        ConversationParser.projectsRootPath = "\(NSHomeDirectory())/.claude/projects"
+        ConversationParser.projectsRootPath = ConversationParser.defaultProjectsRootPath
+        ClaudeConfigDirectoryResolver.resetTestingHooks()
         try? FileManager.default.removeItem(at: tempDirectoryURL)
         tempDirectoryURL = nil
         try await super.tearDown()
@@ -45,6 +46,26 @@ final class ConversationParserTests: XCTestCase {
 
         XCTAssertFalse(result.interrupted)
         XCTAssertEqual(result.messages.map(\.text), ["What's up?"])
+    }
+
+    @MainActor
+    func testSessionFilePathUsesConfiguredClaudeConfigDirectory() {
+        let resolution = ClaudeConfigDirectoryResolution(
+            path: "/tmp/custom-claude-config",
+            source: .environment,
+            shouldCache: true
+        )
+        ConversationParser.configureProjectsRootPath(using: resolution)
+
+        let path = ConversationParser.sessionFilePath(
+            sessionId: "session-123",
+            cwd: "/Users/ruban/Developer/GitHub/notchi"
+        )
+
+        XCTAssertEqual(
+            path,
+            "/tmp/custom-claude-config/projects/-Users-ruban-Developer-GitHub-notchi/session-123.jsonl"
+        )
     }
 
     private func assistantLine(uuid: String, text: String, model: String) -> String {

@@ -15,12 +15,18 @@ struct ParseResult {
 
 actor ConversationParser {
     static let shared = ConversationParser()
-    static var projectsRootPath = "\(NSHomeDirectory())/.claude/projects"
+    static let defaultProjectsRootPath = "\(NSHomeDirectory())/.claude/projects"
+    static var projectsRootPath = defaultProjectsRootPath
 
     private var lastFileOffset: [String: UInt64] = [:]
     private var seenMessageIds: [String: Set<String>] = [:]
 
     private static let emptyResult = ParseResult(messages: [], interrupted: false)
+
+    @MainActor
+    static func configureProjectsRootPath(using claudeConfig: ClaudeConfigDirectoryResolution) {
+        projectsRootPath = claudeConfig.projectsDirectoryURL.path
+    }
 
     /// Parse only NEW assistant text messages since last call
     func parseIncremental(sessionId: String, cwd: String) -> ParseResult {

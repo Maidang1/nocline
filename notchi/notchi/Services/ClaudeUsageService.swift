@@ -136,6 +136,10 @@ struct ClaudeConfigDirectoryResolution {
         hooksDirectoryURL.appendingPathComponent("notchi-hook.sh")
     }
 
+    var projectsDirectoryURL: URL {
+        directoryURL.appendingPathComponent("projects", isDirectory: true)
+    }
+
     var claudeBinaryPath: String {
         directoryURL.appendingPathComponent("bin/claude").path
     }
