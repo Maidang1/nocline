@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PROJECT_PATH="notchi/notchi.xcodeproj"
-SCHEME="notchi"
+PROJECT_PATH="Nocline/Nocline.xcodeproj"
+SCHEME="Nocline"
 DESTINATION="platform=macOS"
 
 BUILD_ROOT="build/test"
@@ -45,7 +45,7 @@ if [[ "$preset" == "focused" ]]; then
         "-only-testing:Tests/HookEventTests"
         "-only-testing:Tests/ConversationParserTests"
         "-only-testing:Tests/SessionStoreTests"
-        "-only-testing:Tests/NotchiStateMachineTests"
+        "-only-testing:Tests/NoclineStateMachineTests"
         "-only-testing:Tests/ClaudeUsageServiceTests"
         "-only-testing:Tests/KeychainManagerTests"
         "-only-testing:Tests/NotchPanelManagerTests"

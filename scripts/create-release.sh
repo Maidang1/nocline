@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # =============================================================================
-# Notchi Release Script
+# Nocline Release Script
 # Usage: ./scripts/create-release.sh <version>
 # Example: ./scripts/create-release.sh 1.1.0
 # =============================================================================
@@ -11,9 +11,9 @@ set -euo pipefail
 TEAM_ID="SXT98GH5HN"
 BUNDLE_ID="com.ruban.notchi"
 SCHEME="notchi"
-PROJECT_PATH="notchi/notchi.xcodeproj"
+PROJECT_PATH="Nocline/Nocline.xcodeproj"
 APPCAST_OUTPUT="docs/appcast.xml"
-APP_NAME="Notchi"
+APP_NAME="Nocline"
 WEBSITE_APPCAST_OUTPUT="website/public/appcast.xml"
 SIGNED_RELEASE_NOTES_DIR="website/release-notes-signed"
 
@@ -204,7 +204,7 @@ echo "Exported ${APP_PATH}"
 # --- Step 4: Notarize and staple ---
 step "Step 3/6: Notarize and staple"
 
-NOTARIZE_ZIP="${BUILD_DIR}/notchi-submit.zip"
+NOTARIZE_ZIP="${BUILD_DIR}/nocline-submit.zip"
 echo "Creating zip for notarization..."
 ditto -c -k --keepParent "$APP_PATH" "$NOTARIZE_ZIP"
 

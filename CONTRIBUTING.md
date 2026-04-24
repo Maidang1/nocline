@@ -21,7 +21,7 @@ Open an issue describing the change and why it matters. That keeps scope clear b
 ## Local Development
 
 1. Clone the repo
-2. Open `notchi/notchi.xcodeproj` in Xcode
+2. Open `Nocline/Nocline.xcodeproj` in Xcode
 3. Build and run with `⌘R`
 
 The app auto-installs the Codex CLI hook on launch, so start Codex CLI to see live activity.
@@ -37,8 +37,8 @@ The app auto-installs the Codex CLI hook on launch, so start Codex CLI to see li
 
 Hook changes go through the installer service and bundled script:
 
-- `notchi/notchi/Resources/notchi-codex-hook.sh`
-- `notchi/notchi/Services/CodexHookInstaller.swift`
+- `Nocline/Nocline/Resources/nocline-codex-hook.sh`
+- `Nocline/Nocline/Services/CodexHookInstaller.swift`
 
 The installer updates `~/.codex/hooks.json` through JSON merge logic that preserves existing user hooks.
 
