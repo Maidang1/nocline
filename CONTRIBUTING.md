@@ -1,4 +1,4 @@
-# Contributing to Notchi
+# Contributing to Nocline
 
 This document covers bug reports, feature ideas, and pull requests.
 

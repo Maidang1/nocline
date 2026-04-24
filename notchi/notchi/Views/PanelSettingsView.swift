@@ -99,82 +99,70 @@ struct PanelSettingsView: View {
     private var codexUsageSection: some View {
         let presentation = CodexUsageSectionPresentation.make(from: codexUsageService.state)
 
-        return VStack(alignment: .leading, spacing: SettingsLayout.usageCardSpacing) {
-            SettingsRowView(icon: "gauge.with.dots.needle.33percent", title: "Codex Usage") {
-                HStack(spacing: 8) {
-                    Button(action: refreshCodexUsage) {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundColor(
-                                codexUsageService.state == .loading
-                                    ? TerminalColors.dimmedText
-                                    : TerminalColors.secondaryText
-                            )
-                            .frame(
-                                width: SettingsLayout.usageRefreshButtonSize,
-                                height: SettingsLayout.usageRefreshButtonSize
-                            )
-                            .background(Color.white.opacity(0.04))
-                            .clipShape(Circle())
+        return SettingsRowView(icon: "gauge.with.dots.needle.33percent", title: "Codex Usage") {
+            HStack(spacing: 8) {
+                if presentation.summaryMetrics.isEmpty {
+                    if let summaryMessage = presentation.summaryMessage {
+                        Text(summaryMessage)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(TerminalColors.dimmedText)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .frame(maxWidth: 180, alignment: .trailing)
                     }
-                    .buttonStyle(.plain)
-                    .disabled(codexUsageService.state == .loading)
-
-                    statusBadge(
-                        presentation.statusText,
-                        color: usageStatusColor(for: codexUsageService.state),
-                        fixedWidth: false
-                    )
+                } else {
+                    usageSummaryMetricsView(metrics: presentation.summaryMetrics)
                 }
-            }
 
-            VStack(spacing: 0) {
-                ForEach(Array(presentation.rows.enumerated()), id: \.offset) { index, row in
-                    if index > 0 {
-                        Divider().background(Color.white.opacity(0.06))
-                    }
-
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(row.title)
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundColor(TerminalColors.primaryText)
-
-                            HStack(spacing: 6) {
-                                Text(row.detailText)
-                                    .font(.system(size: 10))
-                                    .foregroundColor(TerminalColors.dimmedText)
-
-                                if let badgeText = row.badgeText {
-                                    Text(badgeText)
-                                        .font(.system(size: 9, weight: .medium))
-                                        .foregroundColor(TerminalColors.amber)
-                                        .padding(.horizontal, 5)
-                                        .padding(.vertical, 1)
-                                        .background(TerminalColors.amber.opacity(0.14))
-                                        .cornerRadius(4)
-                                }
-                            }
-                        }
-
-                        Spacer()
-
-                        Text(row.remainingText)
-                            .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                            .foregroundColor(TerminalColors.primaryText)
-                    }
-                    .padding(.horizontal, SettingsLayout.usageCardHorizontalPadding)
-                    .padding(.vertical, SettingsLayout.usageCardVerticalPadding)
+                Button(action: refreshCodexUsage) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(
+                            codexUsageService.state == .loading
+                                ? TerminalColors.dimmedText
+                                : TerminalColors.secondaryText
+                        )
+                        .frame(
+                            width: SettingsLayout.usageRefreshButtonSize,
+                            height: SettingsLayout.usageRefreshButtonSize
+                        )
+                        .background(Color.white.opacity(0.04))
+                        .clipShape(Circle())
                 }
+                .buttonStyle(.plain)
+                .disabled(codexUsageService.state == .loading)
+
+                statusBadge(
+                    presentation.statusText,
+                    color: usageStatusColor(for: codexUsageService.state),
+                    fixedWidth: false
+                )
             }
-            .background(TerminalColors.subtleBackground)
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color.white.opacity(0.06), lineWidth: 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .padding(.leading, 28)
         }
+    }
+
+    private func usageSummaryMetricsView(metrics: [CodexUsageSummaryMetric]) -> some View {
+        HStack(spacing: 6) {
+            ForEach(Array(metrics.enumerated()), id: \.offset) { index, metric in
+                HStack(spacing: 4) {
+                    Text(metric.label)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(TerminalColors.dimmedText)
+
+                    Text("\(metric.remainingPercent)%")
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .foregroundColor(usageMetricColor(for: metric.remainingPercent))
+                }
+
+                if index < metrics.count - 1 {
+                    Text("·")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(TerminalColors.dimmedText)
+                }
+            }
+        }
+        .lineLimit(1)
+        .frame(maxWidth: 180, alignment: .trailing)
     }
 
     private func openGitHubRepo() {
@@ -192,7 +180,7 @@ struct PanelSettingsView: View {
             HStack {
                 Image(systemName: "xmark.circle")
                     .font(.system(size: 13))
-                Text("Quit Notchi")
+                Text("Quit Nocline")
                     .font(.system(size: 12, weight: .medium))
             }
             .foregroundColor(TerminalColors.red)
@@ -248,6 +236,17 @@ struct PanelSettingsView: View {
             return snapshot.isFromCache ? TerminalColors.amber : TerminalColors.accent
         case .unavailable:
             return TerminalColors.red
+        }
+    }
+
+    private func usageMetricColor(for remainingPercent: Int) -> Color {
+        switch remainingPercent {
+        case 61...100:
+            return TerminalColors.green
+        case 0...20:
+            return TerminalColors.red
+        default:
+            return TerminalColors.amber
         }
     }
 

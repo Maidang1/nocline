@@ -54,8 +54,15 @@ struct CodexUsageWindowPresentation: Equatable {
     let badgeText: String?
 }
 
+struct CodexUsageSummaryMetric: Equatable {
+    let label: String
+    let remainingPercent: Int
+}
+
 struct CodexUsageSectionPresentation: Equatable {
     let statusText: String
+    let summaryMetrics: [CodexUsageSummaryMetric]
+    let summaryMessage: String?
     let rows: [CodexUsageWindowPresentation]
 
     static func make(from state: CodexUsageState, now: Date = Date()) -> Self {
@@ -63,6 +70,8 @@ struct CodexUsageSectionPresentation: Equatable {
         case .idle, .loading:
             return CodexUsageSectionPresentation(
                 statusText: "Loading...",
+                summaryMetrics: [],
+                summaryMessage: "Syncing",
                 rows: [
                     CodexUsageWindowPresentation(
                         title: "5h Remaining",
@@ -79,19 +88,26 @@ struct CodexUsageSectionPresentation: Equatable {
                 ]
             )
         case .loaded(let snapshot):
+            let fiveHourResetText = resetDescription(for: snapshot.fiveHour.resetAt, now: now)
+            let weekResetText = resetDescription(for: snapshot.week.resetAt, now: now)
             return CodexUsageSectionPresentation(
                 statusText: snapshot.isFromCache ? "Cached" : "Live",
+                summaryMetrics: [
+                    CodexUsageSummaryMetric(label: "5h", remainingPercent: snapshot.fiveHour.remainingPercent),
+                    CodexUsageSummaryMetric(label: "Week", remainingPercent: snapshot.week.remainingPercent),
+                ],
+                summaryMessage: nil,
                 rows: [
                     CodexUsageWindowPresentation(
                         title: "5h Remaining",
                         remainingText: "\(snapshot.fiveHour.remainingPercent)%",
-                        detailText: resetDescription(for: snapshot.fiveHour.resetAt, now: now),
+                        detailText: fiveHourResetText,
                         badgeText: snapshot.isFromCache ? "Cached" : nil
                     ),
                     CodexUsageWindowPresentation(
                         title: "Week Remaining",
                         remainingText: "\(snapshot.week.remainingPercent)%",
-                        detailText: resetDescription(for: snapshot.week.resetAt, now: now),
+                        detailText: weekResetText,
                         badgeText: snapshot.isFromCache ? "Cached" : nil
                     ),
                 ]
@@ -99,6 +115,8 @@ struct CodexUsageSectionPresentation: Equatable {
         case .unavailable(let reason):
             return CodexUsageSectionPresentation(
                 statusText: "Unavailable",
+                summaryMetrics: [],
+                summaryMessage: unavailableSummaryText(for: reason),
                 rows: [
                     CodexUsageWindowPresentation(
                         title: "5h Remaining",
@@ -130,6 +148,19 @@ struct CodexUsageSectionPresentation: Equatable {
             return "Resets in \(hours)h \(minutes)m"
         }
         return "Resets in \(max(1, minutes))m"
+    }
+
+    private static func unavailableSummaryText(for reason: CodexUsageUnavailableReason) -> String {
+        switch reason {
+        case .notAuthenticated:
+            return "Sign in to Codex CLI"
+        case .networkError:
+            return "Check internet connection"
+        case .localFileMissing:
+            return "Install Codex CLI"
+        case .serverError(let message):
+            return message
+        }
     }
 }
 

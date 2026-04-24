@@ -21,7 +21,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		47C922822F2CFA1F00EA1E18 /* notchi.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = notchi.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		47C922822F2CFA1F00EA1E18 /* Nocline.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Nocline.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A11A00022F50000000EA1E18 /* Tests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = Tests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -69,7 +69,7 @@
 		47C922832F2CFA1F00EA1E18 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				47C922822F2CFA1F00EA1E18 /* notchi.app */,
+				47C922822F2CFA1F00EA1E18 /* Nocline.app */,
 				A11A00022F50000000EA1E18 /* Tests.xctest */,
 			);
 			name = Products;
@@ -98,7 +98,7 @@
 				47C923A12F2CFA1F00EA1E18 /* Sparkle */,
 			);
 			productName = notchi;
-			productReference = 47C922822F2CFA1F00EA1E18 /* notchi.app */;
+			productReference = 47C922822F2CFA1F00EA1E18 /* Nocline.app */;
 			productType = "com.apple.product-type.application";
 		};
 		A11A00032F50000000EA1E18 /* Tests */ = {
@@ -358,7 +358,7 @@
 				);
 				MARKETING_VERSION = 1.0.5;
 				PRODUCT_BUNDLE_IDENTIFIER = com.ruban.notchi;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = Nocline;
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -394,7 +394,7 @@
 				);
 				MARKETING_VERSION = 1.0.5;
 				PRODUCT_BUNDLE_IDENTIFIER = com.ruban.notchi;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = Nocline;
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -427,7 +427,7 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/notchi.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/notchi";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Nocline.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Nocline";
 				TEST_TARGET_NAME = notchi;
 			};
 			name = Debug;
@@ -454,7 +454,7 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/notchi.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/notchi";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Nocline.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Nocline";
 				TEST_TARGET_NAME = notchi;
 			};
 			name = Release;

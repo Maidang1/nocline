@@ -16,7 +16,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "47C922812F2CFA1F00EA1E18"
-               BuildableName = "notchi.app"
+               BuildableName = "Nocline.app"
                BlueprintName = "notchi"
                ReferencedContainer = "container:notchi.xcodeproj">
             </BuildableReference>
@@ -58,7 +58,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "47C922812F2CFA1F00EA1E18"
-            BuildableName = "notchi.app"
+            BuildableName = "Nocline.app"
             BlueprintName = "notchi"
             ReferencedContainer = "container:notchi.xcodeproj">
          </BuildableReference>
@@ -75,7 +75,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "47C922812F2CFA1F00EA1E18"
-            BuildableName = "notchi.app"
+            BuildableName = "Nocline.app"
             BlueprintName = "notchi"
             ReferencedContainer = "container:notchi.xcodeproj">
          </BuildableReference>
