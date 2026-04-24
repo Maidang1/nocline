@@ -47,76 +47,9 @@ final class NotchiStateMachineTests: XCTestCase {
         XCTAssertFalse(session.isProcessing)
     }
 
-    func testSessionStartForwardsToClaudeUsageHandler() {
-        let stateMachine = NotchiStateMachine.shared
-        var receivedTriggers: [ClaudeUsageResumeTrigger] = []
-        stateMachine.handleClaudeUsageResumeTrigger = { trigger in
-            receivedTriggers.append(trigger)
-        }
-
-        stateMachine.handleEvent(makeEvent(
-            sessionId: "session-start-\(UUID().uuidString)",
-            event: "SessionStart",
-            status: "processing"
-        ))
-
-        XCTAssertEqual(receivedTriggers, [.sessionStart])
-    }
-
-    func testInteractiveUserPromptSubmitForwardsToClaudeUsageHandler() {
-        let stateMachine = NotchiStateMachine.shared
-        var receivedTriggers: [ClaudeUsageResumeTrigger] = []
-        stateMachine.handleClaudeUsageResumeTrigger = { trigger in
-            receivedTriggers.append(trigger)
-        }
-
-        stateMachine.handleEvent(makeEvent(
-            sessionId: "prompt-submit-\(UUID().uuidString)",
-            event: "UserPromptSubmit",
-            status: "processing",
-            userPrompt: "hello"
-        ))
-
-        XCTAssertEqual(receivedTriggers, [.userPromptSubmit])
-    }
-
-    func testLocalSlashUserPromptSubmitDoesNotForwardToClaudeUsageHandler() {
-        let stateMachine = NotchiStateMachine.shared
-        var receivedTriggers: [ClaudeUsageResumeTrigger] = []
-        stateMachine.handleClaudeUsageResumeTrigger = { trigger in
-            receivedTriggers.append(trigger)
-        }
-
-        stateMachine.handleEvent(makeEvent(
-            sessionId: "local-prompt-\(UUID().uuidString)",
-            event: "UserPromptSubmit",
-            status: "processing",
-            userPrompt: "/help"
-        ))
-
-        XCTAssertTrue(receivedTriggers.isEmpty)
-    }
-
-    func testNonInteractiveUserPromptSubmitDoesNotForwardToClaudeUsageHandler() {
-        let stateMachine = NotchiStateMachine.shared
-        var receivedTriggers: [ClaudeUsageResumeTrigger] = []
-        stateMachine.handleClaudeUsageResumeTrigger = { trigger in
-            receivedTriggers.append(trigger)
-        }
-
-        stateMachine.handleEvent(makeEvent(
-            sessionId: "noninteractive-prompt-\(UUID().uuidString)",
-            event: "UserPromptSubmit",
-            status: "processing",
-            userPrompt: "hello",
-            interactive: false
-        ))
-
-        XCTAssertTrue(receivedTriggers.isEmpty)
-    }
-
-    func testHookEventAllowsMissingTranscriptPathForStaleHooks() throws {
+    func testHookEventAllowsMissingTranscriptPathForCodexHooks() throws {
         let data = try JSONSerialization.data(withJSONObject: [
+            "provider": "codex",
             "session_id": "stale-hook",
             "cwd": "/tmp",
             "event": "SessionStart",
@@ -127,6 +60,7 @@ final class NotchiStateMachineTests: XCTestCase {
 
         XCTAssertNil(event.transcriptPath)
         XCTAssertEqual(event.sessionId, "stale-hook")
+        XCTAssertEqual(event.provider, .codex)
     }
 
     private func makeInteractiveSession(sessionId: String) -> SessionData {
@@ -143,6 +77,7 @@ final class NotchiStateMachineTests: XCTestCase {
     }
 
     private func makeEvent(
+        provider: AgentProvider = .codex,
         sessionId: String,
         event: String,
         status: String,
@@ -150,6 +85,7 @@ final class NotchiStateMachineTests: XCTestCase {
         interactive: Bool = true
     ) -> HookEvent {
         HookEvent(
+            provider: provider,
             sessionId: sessionId,
             transcriptPath: nil,
             cwd: "/tmp",

@@ -1,11 +1,15 @@
 import Foundation
 
 struct HookEvent: Decodable, Sendable {
+    let provider: AgentProvider
     let sessionId: String
+    let turnId: String?
     let transcriptPath: String?
     let cwd: String
     let event: String
     let status: String
+    let model: String?
+    let source: String?
     let pid: Int?
     let tty: String?
     let tool: String?
@@ -16,14 +20,76 @@ struct HookEvent: Decodable, Sendable {
     let interactive: Bool?
 
     enum CodingKeys: String, CodingKey {
+        case provider
         case sessionId = "session_id"
+        case turnId = "turn_id"
         case transcriptPath = "transcript_path"
-        case cwd, event, status, pid, tty, tool
+        case cwd, event, status, model, source, pid, tty, tool
         case toolInput = "tool_input"
         case toolUseId = "tool_use_id"
         case userPrompt = "user_prompt"
         case permissionMode = "permission_mode"
         case interactive
+    }
+
+    init(
+        provider: AgentProvider = .codex,
+        sessionId: String,
+        turnId: String? = nil,
+        transcriptPath: String?,
+        cwd: String,
+        event: String,
+        status: String,
+        model: String? = nil,
+        source: String? = nil,
+        pid: Int?,
+        tty: String?,
+        tool: String?,
+        toolInput: [String: AnyCodable]?,
+        toolUseId: String?,
+        userPrompt: String?,
+        permissionMode: String?,
+        interactive: Bool?
+    ) {
+        self.provider = provider
+        self.sessionId = sessionId
+        self.turnId = turnId
+        self.transcriptPath = transcriptPath
+        self.cwd = cwd
+        self.event = event
+        self.status = status
+        self.model = model
+        self.source = source
+        self.pid = pid
+        self.tty = tty
+        self.tool = tool
+        self.toolInput = toolInput
+        self.toolUseId = toolUseId
+        self.userPrompt = userPrompt
+        self.permissionMode = permissionMode
+        self.interactive = interactive
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        provider = try container.decode(AgentProvider.self, forKey: .provider)
+        sessionId = try container.decode(String.self, forKey: .sessionId)
+        turnId = try container.decodeIfPresent(String.self, forKey: .turnId)
+        transcriptPath = try container.decodeIfPresent(String.self, forKey: .transcriptPath)
+        cwd = try container.decodeIfPresent(String.self, forKey: .cwd) ?? ""
+        event = try container.decode(String.self, forKey: .event)
+        status = try container.decode(String.self, forKey: .status)
+        model = try container.decodeIfPresent(String.self, forKey: .model)
+        source = try container.decodeIfPresent(String.self, forKey: .source)
+        pid = try container.decodeIfPresent(Int.self, forKey: .pid)
+        tty = try container.decodeIfPresent(String.self, forKey: .tty)
+        tool = try container.decodeIfPresent(String.self, forKey: .tool)
+        toolInput = try container.decodeIfPresent([String: AnyCodable].self, forKey: .toolInput)
+        toolUseId = try container.decodeIfPresent(String.self, forKey: .toolUseId)
+        userPrompt = try container.decodeIfPresent(String.self, forKey: .userPrompt)
+        permissionMode = try container.decodeIfPresent(String.self, forKey: .permissionMode)
+        interactive = try container.decodeIfPresent(Bool.self, forKey: .interactive)
     }
 }
 

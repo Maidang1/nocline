@@ -10,23 +10,22 @@ final class NotchiStateMachine {
 
     let sessionStore = SessionStore.shared
 
-    private var emotionDecayTimer: Task<Void, Never>?
+    private var staleSessionPruneTimer: Task<Void, Never>?
     private var pendingSyncTasks: [String: Task<Void, Never>] = [:]
     private var pendingPositionMarks: [String: Task<Void, Never>] = [:]
     private var fileWatchers: [String: (source: DispatchSourceFileSystemObject, fd: Int32)] = [:]
-    var handleClaudeUsageResumeTrigger: (ClaudeUsageResumeTrigger) -> Void = { trigger in
-        ClaudeUsageService.shared.handleClaudeResumeTrigger(trigger)
-    }
 
     private static let syncDebounce: Duration = .milliseconds(100)
     private static let waitingClearGuard: TimeInterval = 2.0
+    private static let staleIdlePruneInterval: Duration = .seconds(300)
+    private static let staleIdleMaxAge: TimeInterval = 1800
 
     var currentState: NotchiState {
         sessionStore.effectiveSession?.state ?? .idle
     }
 
     private init() {
-        startEmotionDecayTimer()
+        startStaleSessionPruneTimer()
     }
 
     func handleEvent(_ event: HookEvent) {
@@ -50,17 +49,6 @@ final class NotchiStateMachine {
                 startFileWatcher(sessionId: event.sessionId, transcriptPath: transcriptPath)
             }
 
-            if session.isInteractive, let prompt = event.userPrompt {
-                Task {
-                    let result = await EmotionAnalyzer.shared.analyze(prompt)
-                    session.emotionState.recordEmotion(result.emotion, intensity: result.intensity, prompt: prompt)
-                }
-            }
-
-            if session.isInteractive, !SessionStore.isLocalSlashCommand(event.userPrompt) {
-                handleClaudeUsageResumeTrigger(.userPromptSubmit)
-            }
-
         case "PreToolUse":
             if isDone {
                 SoundService.shared.playNotificationSound(sessionId: event.sessionId, isInteractive: session.isInteractive)
@@ -70,15 +58,12 @@ final class NotchiStateMachine {
             SoundService.shared.playNotificationSound(sessionId: event.sessionId, isInteractive: session.isInteractive)
 
         case "PostToolUse":
-            scheduleFileSync(sessionId: event.sessionId, transcriptPath: transcriptPath)
-
-        case "SessionStart":
-            handleClaudeUsageResumeTrigger(.sessionStart)
+            scheduleFileSync(provider: event.provider, sessionId: event.sessionId, transcriptPath: transcriptPath)
 
         case "Stop":
             SoundService.shared.playNotificationSound(sessionId: event.sessionId, isInteractive: session.isInteractive)
             stopFileWatcher(sessionId: event.sessionId)
-            scheduleFileSync(sessionId: event.sessionId, transcriptPath: transcriptPath)
+            scheduleFileSync(provider: event.provider, sessionId: event.sessionId, transcriptPath: transcriptPath)
 
         case "SessionEnd":
             stopFileWatcher(sessionId: event.sessionId)
@@ -100,10 +85,9 @@ final class NotchiStateMachine {
         session.resetSleepTimer()
     }
 
-    private func scheduleFileSync(sessionId: String, transcriptPath: String) {
+    private func scheduleFileSync(provider _: AgentProvider, sessionId: String, transcriptPath: String) {
         pendingSyncTasks[sessionId]?.cancel()
         pendingSyncTasks[sessionId] = Task {
-            // Wait for position marking to complete first
             await pendingPositionMarks[sessionId]?.value
 
             try? await Task.sleep(for: Self.syncDebounce)
@@ -130,6 +114,7 @@ final class NotchiStateMachine {
 
     func reconcileFileSyncResult(_ result: ParseResult, for sessionId: String, hasActiveWatcher: Bool) {
         guard let session = sessionStore.sessions[sessionId] else { return }
+        let previousActiveWorkSessionCount = sessionStore.activeWorkSessionCount
 
         if !result.messages.isEmpty,
            session.isInteractive,
@@ -146,6 +131,10 @@ final class NotchiStateMachine {
                   Date().timeIntervalSince(session.lastActivity) > Self.waitingClearGuard {
             session.clearPendingQuestions()
             session.updateTask(.working)
+        }
+
+        if previousActiveWorkSessionCount != sessionStore.activeWorkSessionCount {
+            sessionStore.notifyActivityStateChanged()
         }
     }
 
@@ -165,7 +154,11 @@ final class NotchiStateMachine {
         )
 
         source.setEventHandler { [weak self] in
-            self?.scheduleFileSync(sessionId: sessionId, transcriptPath: transcriptPath)
+            guard let self,
+                  let provider = self.sessionStore.sessions[sessionId]?.provider else {
+                return
+            }
+            self.scheduleFileSync(provider: provider, sessionId: sessionId, transcriptPath: transcriptPath)
         }
 
         source.setCancelHandler {
@@ -183,22 +176,17 @@ final class NotchiStateMachine {
         logger.debug("Stopped file watcher for session \(sessionId)")
     }
 
-    private func startEmotionDecayTimer() {
-        emotionDecayTimer = Task {
+    private func startStaleSessionPruneTimer() {
+        staleSessionPruneTimer = Task {
             while !Task.isCancelled {
-                try? await Task.sleep(for: EmotionState.decayInterval)
+                try? await Task.sleep(for: Self.staleIdlePruneInterval)
                 guard !Task.isCancelled else { return }
-                for session in sessionStore.sessions.values {
-                    session.emotionState.decayAll()
-                }
+                sessionStore.pruneStaleCodexIdleSessions(maxIdleAge: Self.staleIdleMaxAge)
             }
         }
     }
 
     func resetTestingHooks() {
-        handleClaudeUsageResumeTrigger = { trigger in
-            ClaudeUsageService.shared.handleClaudeResumeTrigger(trigger)
-        }
     }
 
 }

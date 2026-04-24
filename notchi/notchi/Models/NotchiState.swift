@@ -1,4 +1,4 @@
-import AppKit
+import CoreGraphics
 
 enum NotchiTask: String, CaseIterable {
     case idle, working, sleeping, compacting, waiting
@@ -11,8 +11,6 @@ enum NotchiTask: String, CaseIterable {
         case .working: return 4.0
         }
     }
-
-    var spritePrefix: String { rawValue }
 
     var bobDuration: Double {
         switch self {
@@ -60,63 +58,62 @@ enum NotchiTask: String, CaseIterable {
         }
     }
 
-    var frameCount: Int {
+    var avatarScale: CGFloat {
         switch self {
-        case .compacting: return 5
-        default: return 6
+        case .sleeping: return 0.92
+        case .compacting: return 0.94
+        case .idle, .waiting, .working: return 1.0
         }
     }
 
-    var columns: Int {
+    var pulseDuration: Double {
         switch self {
-        case .compacting: return 5
-        default: return 6
-        }
-    }
-}
-
-enum NotchiEmotion: String, CaseIterable {
-    case neutral, happy, sad, sob
-
-    var swayAmplitude: Double {
-        switch self {
-        case .neutral: return 0.5
-        case .happy:   return 1.0
-        case .sad:     return 0.25
-        case .sob:     return 0.15
+        case .sleeping: return 3.6
+        case .idle: return 2.6
+        case .waiting: return 1.8
+        case .working: return 1.1
+        case .compacting: return 1.4
         }
     }
 }
 
 struct NotchiState: Equatable {
     var task: NotchiTask
-    var emotion: NotchiEmotion = .neutral
 
-    /// Resolves the sprite sheet name with fallback chain: exact emotion -> sad (for sob) -> neutral.
-    var spriteSheetName: String {
-        let name = "\(task.spritePrefix)_\(emotion.rawValue)"
-        if NSImage(named: name) != nil { return name }
-        if emotion == .sob {
-            let sadName = "\(task.spritePrefix)_sad"
-            if NSImage(named: sadName) != nil { return sadName }
-        }
-        return "\(task.spritePrefix)_neutral"
-    }
     var animationFPS: Double { task.animationFPS }
     var bobDuration: Double { task.bobDuration }
-    var bobAmplitude: CGFloat {
-        switch emotion {
-        case .sob: return 0
-        case .sad: return task.bobAmplitude * 0.5
-        default:   return task.bobAmplitude
-        }
-    }
-    var swayAmplitude: Double { emotion.swayAmplitude }
-    var canWalk: Bool { emotion == .sob ? false : task.canWalk }
+    var bobAmplitude: CGFloat { task.bobAmplitude }
+    var swayAmplitude: Double { 0.5 }
+    var canWalk: Bool { task.canWalk }
     var displayName: String { task.displayName }
     var walkFrequencyRange: ClosedRange<Double> { task.walkFrequencyRange }
-    var frameCount: Int { task.frameCount }
-    var columns: Int { task.columns }
+    var avatarScale: CGFloat { task.avatarScale }
+    var pulseDuration: Double { task.pulseDuration }
+    var haloOpacity: Double {
+        switch task {
+        case .sleeping: return 0.08
+        case .idle: return 0.18
+        case .waiting: return 0.22
+        case .working: return 0.34
+        case .compacting: return 0.26
+        }
+    }
+    var activityArcOpacity: Double {
+        switch task {
+        case .working: return 1
+        case .waiting: return 0.55
+        case .compacting: return 0.8
+        case .idle, .sleeping: return 0
+        }
+    }
+    var shellOpacity: Double {
+        switch task {
+        case .sleeping: return 0.72
+        case .idle: return 0.88
+        case .waiting, .compacting, .working: return 1
+        }
+    }
+    var shouldAnimatePulse: Bool { true }
 
     static let idle = NotchiState(task: .idle)
     static let working = NotchiState(task: .working)

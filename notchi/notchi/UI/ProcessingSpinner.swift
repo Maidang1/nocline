@@ -10,7 +10,7 @@ struct ProcessingSpinner: View {
     var body: some View {
         Text(symbols[phase % symbols.count])
             .font(.system(size: 12, weight: .bold))
-            .foregroundColor(TerminalColors.claudeOrange)
+            .foregroundColor(TerminalColors.accent)
             .frame(width: 12, alignment: .center)
             .onReceive(timer) { _ in
                 phase = (phase + 1) % symbols.count

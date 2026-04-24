@@ -1,55 +1,46 @@
 # Notchi
 
 > [!IMPORTANT]
-> If you're currently on Notchi `1.0.0`, please install `1.0.1` or later manually from the DMG [here](https://github.com/sk-ruban/notchi/releases/latest). The in-app updater in `1.0.0` is broken for that first upgrade, but should work thereafter.
+> If you're currently on Notchi `1.0.0`, please install `1.0.1` or later manually from the DMG [here](https://github.com/sk-ruban/notchi/releases/latest). The in-app updater in `1.0.0` needs that one manual hop.
 
-A macOS notch companion that reacts to Claude Code activity in real-time.
+A macOS notch companion that reacts to Codex CLI activity in real time.
 
 https://github.com/user-attachments/assets/e417bd40-cae8-47c0-998a-905166cf3513
 
 ## What it does
 
-- Reacts to Claude Code events in real-time (thinking, working, errors, completions)
-- Analyzes conversation sentiment to show emotions (happy, sad, neutral, sob)
-- Click to expand and see session time and usage quota
-- Supports multiple concurrent Claude Code sessions with individual sprites
-- Sound effects for events (optional, auto-muted when terminal is focused)
-- Auto-updates via Sparkle
+- Reacts to Codex CLI events in real time
+- Shows session time, activity, and live task state in the notch
+- Supports multiple concurrent Codex CLI sessions with individual sprites
+- Plays optional sound effects for events and auto-mutes while the terminal is focused
+- Auto-updates through Sparkle
 
 ## Requirements
 
 - macOS 15.0+ (Sequoia)
 - MacBook with notch
-- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) installed
+- [Codex CLI](https://developers.openai.com/codex) installed
 
 ## Install
 
 1. Download `Notchi-x.x.x.dmg` from the [latest GitHub Release](https://github.com/sk-ruban/notchi/releases/latest)
 2. Open the DMG and drag Notchi to Applications
-3. Launch Notchi — it auto-installs Claude Code hooks on first launch
-4. A macOS keychain popup will appear asking to access Claude Code's cached OAuth token (used for API usage stats). Click **Always Allow** so it won't prompt again on future launches
-
-   <img src="assets/keychain-popup.png" alt="Keychain access popup" width="450">
-
-5. *(Optional)* Click the notch to expand → open Settings → paste your Anthropic API key. This enables sentiment analysis of your prompts so the mascot reacts emotionally
-
-   <img src="assets/emotion-settings.png" alt="Emotion analysis settings" width="400">
-
-6. Start using Claude Code and watch Notchi react
+3. Launch Notchi — it auto-installs Codex CLI hooks on first launch
+4. Start using Codex CLI and watch Notchi react
 
 ## How it works
 
 ```
-Claude Code --> Hooks (shell scripts) --> Unix Socket --> Event Parser --> State Machine --> Animated Sprites
+Codex CLI --> Hook script --> Unix Socket --> Event Parser --> State Machine --> Animated Sprites
 ```
 
-Notchi registers shell script hooks with Claude Code on launch. When Claude Code emits events (tool use, thinking, prompts, session start/end), the hook script sends JSON payloads to a Unix socket. The app parses these events, runs them through a state machine that maps to sprite animations (idle, working, sleeping, compacting, waiting), and uses the Anthropic API to analyze user prompt sentiment for emotional reactions.
+Notchi registers a Codex hook script on launch. When Codex CLI emits events such as prompt submission, tool use, permission requests, stop events, and session lifecycle updates, the hook script forwards JSON payloads to a local Unix socket. The app parses those events, maps them to sprite states, and renders the live session feed inside the notch.
 
-Each Claude Code session gets its own sprite on the grass island. Clicking expands the notch panel to show a live activity feed, session info, and API usage stats.
+Each Codex CLI session gets its own agent marker on the notch dock. Clicking expands the notch panel to show recent activity, session details, and session selection when multiple Codex runs are active.
 
 ## Contributing
 
-If you have any bugs, ideas, or would like to contribute through pull requests, please check out [Contributing to Notchi](CONTRIBUTING.md).
+If you have bugs, ideas, or a pull request, start with [Contributing to Notchi](CONTRIBUTING.md).
 
 ## Community Ports
 
@@ -57,9 +48,9 @@ If you have any bugs, ideas, or would like to contribute through pull requests, 
 
 ## Credits
 
-- [Claude Island](https://github.com/farouqaldori/claude-island) — design inspiration for the app
+- [Codex](https://openai.com/codex/) — visual direction reference for the current app shell
 - [Readout](https://readout.org) — design inspiration for [notchi.app](https://notchi.app)
-- [Aseprite](https://www.aseprite.org/) — sprite design
+- [Aseprite](https://www.aseprite.org/) — original icon and mascot workflow reference
 
 ## License
 

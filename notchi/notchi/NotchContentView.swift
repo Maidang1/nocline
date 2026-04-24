@@ -42,7 +42,6 @@ struct NotchContentView: View {
 
     var stateMachine: NotchiStateMachine = .shared
     var panelManager: NotchPanelManager = .shared
-    var usageService: ClaudeUsageService = .shared
     var haptics: HapticService = .shared
     @ObservedObject private var updateManager = UpdateManager.shared
     @State private var showingPanelSettings = false
@@ -208,7 +207,7 @@ struct NotchContentView: View {
         .padding(.bottom, isExpanded ? 12 : collapsedHoverBottomInset)
         .background {
             ZStack(alignment: .top) {
-                Color.black
+                TerminalColors.panelBackground
                 GrassIslandView(
                     sessions: sessionStore.sortedSessions,
                     selectedSessionId: sessionStore.selectedSessionId,
@@ -246,7 +245,7 @@ struct NotchContentView: View {
                 }) {
                     Image(systemName: isActivityCollapsed ? "chevron.down" : "chevron.up")
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.white.opacity(0.7))
+                        .foregroundColor(TerminalColors.secondaryText)
                         .padding(8)
                 }
                 .buttonStyle(.plain)
@@ -255,11 +254,15 @@ struct NotchContentView: View {
             }
         }
         .clipShape(notchClipShape)
+        .overlay(
+            notchClipShape
+                .stroke(TerminalColors.border, lineWidth: isExpanded ? 1 : 0.8)
+        )
         .shadow(
             color: isExpanded
-                ? .black.opacity(0.7)
-                : (panelManager.isCollapsedHovered ? .black.opacity(0.3) : .clear),
-            radius: 6
+                ? .black.opacity(0.55)
+                : (panelManager.isCollapsedHovered ? TerminalColors.accentGlow.opacity(0.18) : .clear),
+            radius: isExpanded ? 12 : 8
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .animation(panelAnimation, value: isExpanded)
@@ -293,7 +296,6 @@ struct NotchContentView: View {
                 if isExpanded {
                     ExpandedPanelView(
                         sessionStore: sessionStore,
-                        usageService: usageService,
                         showingSettings: $showingPanelSettings,
                         showingSessionActivity: $showingSessionActivity,
                         isActivityCollapsed: $isActivityCollapsed
@@ -358,7 +360,7 @@ struct NotchContentView: View {
                 Text("Back")
                     .font(.system(size: 12, weight: .medium))
             }
-            .foregroundColor(.white.opacity(0.7))
+            .foregroundColor(TerminalColors.secondaryText)
         }
         .buttonStyle(.plain)
     }

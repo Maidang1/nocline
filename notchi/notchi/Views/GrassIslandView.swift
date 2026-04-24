@@ -1,7 +1,7 @@
 import SwiftUI
 
 private enum SpriteLayout {
-    static let size: CGFloat = 64
+    static let size: CGFloat = 60
     static let usableWidthFraction: CGFloat = 0.8
     static let leftMarginFraction: CGFloat = 0.1
 
@@ -14,12 +14,6 @@ private enum SpriteLayout {
     static func depthSorted(_ sessions: [SessionData]) -> [SessionData] {
         sessions.sorted { $0.spriteYOffset < $1.spriteYOffset }
     }
-}
-
-private enum GrassTexture {
-    static let image = Image("GrassIsland")
-    static let pixelSize = CGSize(width: 512, height: 512)
-    static let tileWidth: CGFloat = 80
 }
 
 // MARK: - Visual layer (placed in .background, no interaction)
@@ -35,9 +29,7 @@ struct GrassIslandView: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .bottom) {
-                Rectangle()
-                    .fill(grassPaint(for: geometry.size))
-                    .frame(width: geometry.size.width, height: geometry.size.height)
+                stageBackground(for: geometry.size)
 
                 if !sessions.isEmpty {
                     ForEach(SpriteLayout.depthSorted(sessions)) { session in
@@ -81,28 +73,42 @@ struct GrassIslandView: View {
         )
     }
 
-    private func grassPaint(for size: CGSize) -> ImagePaint {
-        let scale = max(GrassTexture.tileWidth / GrassTexture.pixelSize.width, size.height / GrassTexture.pixelSize.height)
-        let drawnSize = CGSize(
-            width: GrassTexture.pixelSize.width * scale,
-            height: GrassTexture.pixelSize.height * scale
-        )
-        let visibleWidthFraction = min(1, GrassTexture.tileWidth / drawnSize.width)
-        let visibleHeightFraction = min(1, size.height / drawnSize.height)
+    @ViewBuilder
+    private func stageBackground(for size: CGSize) -> some View {
+        ZStack(alignment: .bottom) {
+            Rectangle()
+                .fill(TerminalColors.shellBackground)
+                .frame(width: size.width, height: size.height)
 
-        // Match the old 80pt aspect-fill tile crop while drawing as a single paint.
-        let sourceRect = CGRect(
-            x: (1 - visibleWidthFraction) / 2,
-            y: (1 - visibleHeightFraction) / 2,
-            width: visibleWidthFraction,
-            height: visibleHeightFraction
-        )
+            LinearGradient(
+                colors: [
+                    TerminalColors.panelBackground.opacity(0.92),
+                    TerminalColors.shellBackground.opacity(0.88)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(width: size.width, height: size.height)
 
-        return ImagePaint(
-            image: GrassTexture.image,
-            sourceRect: sourceRect,
-            scale: scale
-        )
+            LinearGradient(
+                colors: [
+                    TerminalColors.accentGlow.opacity(0.14),
+                    TerminalColors.accentGlow.opacity(0.04),
+                    .clear
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(width: size.width * 0.42, height: size.height * 0.62)
+            .blur(radius: 28)
+            .offset(y: -size.height * 0.2)
+
+            Rectangle()
+                .fill(TerminalColors.border.opacity(0.55))
+                .frame(width: size.width * 0.88, height: 1)
+                .offset(y: size.height * 0.07)
+
+        }
     }
 }
 
@@ -204,14 +210,14 @@ private struct GrassSpriteView: View {
         guard state.bobAmplitude > 0 else { return 0 }
         return state.task == .working ? 1.5 : 1
     }
-    private let glowColor = Color(red: 0.4, green: 0.7, blue: 1.0)
+    private let glowColor = TerminalColors.accentGlow
 
     private var swayAmplitude: Double {
         (state.task == .sleeping || state.task == .compacting) ? 0 : state.swayAmplitude
     }
 
     private var isAnimatingMotion: Bool {
-        bobAmplitude > 0 || swayAmplitude > 0 || state.emotion == .sob
+        bobAmplitude > 0 || swayAmplitude > 0
     }
 
     private var bobDuration: Double {
@@ -225,18 +231,14 @@ private struct GrassSpriteView: View {
         return sin(phase * .pi * 2) * swayAmplitude
     }
 
-    private static let sobTrembleAmplitude: CGFloat = 0.3
-
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !isAnimatingMotion)) { timeline in
-            SpriteSheetView(
-                spriteSheet: state.spriteSheetName,
-                frameCount: state.frameCount,
-                columns: state.columns,
-                fps: state.animationFPS,
-                isAnimating: true
+            CodexAgentBadgeView(
+                state: state,
+                size: SpriteLayout.size,
+                date: timeline.date,
+                emphasis: glowOpacity * 0.35
             )
-            .frame(width: SpriteLayout.size, height: SpriteLayout.size)
             .background(alignment: .bottom) {
                 if glowOpacity > 0 {
                     Ellipse()
@@ -249,7 +251,7 @@ private struct GrassSpriteView: View {
             .rotationEffect(.degrees(swayDegrees(at: timeline.date)), anchor: .bottom)
             .offset(
                 x: SpriteLayout.xOffset(xPosition: xPosition, totalWidth: totalWidth)
-                    + trembleOffset(at: timeline.date, amplitude: state.emotion == .sob ? Self.sobTrembleAmplitude : 0),
+                    + trembleOffset(at: timeline.date, amplitude: 0),
                 y: yOffset + bobOffset(at: timeline.date, duration: bobDuration, amplitude: bobAmplitude)
             )
         }

@@ -66,7 +66,7 @@ struct SoundPickerView: View {
         }) {
             HStack {
                 Circle()
-                    .fill(selectedSound == sound ? TerminalColors.green : Color.clear)
+                    .fill(selectedSound == sound ? TerminalColors.accent : Color.clear)
                     .frame(width: 6, height: 6)
 
                 Text(sound.displayName)

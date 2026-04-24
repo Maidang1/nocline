@@ -31,6 +31,10 @@ final class SessionStore {
         sessions.count
     }
 
+    var activeWorkSessionCount: Int {
+        sessions.values.filter(Self.isActivelyWorking).count
+    }
+
     var selectedSession: SessionData? {
         guard let id = selectedSessionId else { return nil }
         return sessions[id]
@@ -55,8 +59,14 @@ final class SessionStore {
     }
 
     func process(_ event: HookEvent) -> SessionData {
+        let previousActiveWorkSessionCount = activeWorkSessionCount
         let isInteractive = event.interactive ?? true
-        let session = getOrCreateSession(sessionId: event.sessionId, cwd: event.cwd, isInteractive: isInteractive)
+        let session = getOrCreateSession(
+            sessionId: event.sessionId,
+            provider: event.provider,
+            cwd: event.cwd,
+            isInteractive: isInteractive
+        )
         let isProcessing = event.status != "waiting_for_input"
         session.updateProcessingState(isProcessing: isProcessing)
 
@@ -99,7 +109,11 @@ final class SessionStore {
             }
 
         case "PermissionRequest":
-            let question = Self.buildPermissionQuestion(tool: event.tool, toolInput: event.toolInput)
+            let question = Self.buildPermissionQuestion(
+                provider: event.provider,
+                tool: event.tool,
+                toolInput: event.toolInput
+            )
             session.updateTask(.waiting)
             session.setPendingQuestions([question])
 
@@ -121,6 +135,10 @@ final class SessionStore {
             if !isProcessing && session.task != .idle {
                 session.updateTask(.idle)
             }
+        }
+
+        if previousActiveWorkSessionCount != activeWorkSessionCount {
+            postActiveSessionCountChange()
         }
 
         return session
@@ -147,16 +165,44 @@ final class SessionStore {
         return label
     }
 
-    private func getOrCreateSession(sessionId: String, cwd: String, isInteractive: Bool) -> SessionData {
+    func pruneStaleCodexIdleSessions(now: Date = Date(), maxIdleAge: TimeInterval = 1800) {
+        let staleSessionIds = sessions.values
+            .filter { session in
+                session.provider == .codex &&
+                    (session.task == .idle || session.task == .sleeping) &&
+                    !session.isProcessing &&
+                    now.timeIntervalSince(session.lastActivity) >= maxIdleAge
+            }
+            .map(\.id)
+
+        staleSessionIds.forEach { removeSession($0) }
+    }
+
+    func notifyActivityStateChanged() {
+        postActiveSessionCountChange()
+    }
+
+    private func getOrCreateSession(
+        sessionId: String,
+        provider: AgentProvider,
+        cwd: String,
+        isInteractive: Bool
+    ) -> SessionData {
         if let existing = sessions[sessionId] {
             return existing
         }
 
         let existingXPositions = sessions.values.map(\.spriteXPosition)
-        let session = SessionData(sessionId: sessionId, cwd: cwd, isInteractive: isInteractive, existingXPositions: existingXPositions)
+        let session = SessionData(
+            sessionId: sessionId,
+            provider: .codex,
+            cwd: cwd,
+            isInteractive: isInteractive,
+            existingXPositions: existingXPositions
+        )
         sessions[sessionId] = session
         recomputeDisplaySessionNumbers()
-        logger.info("Created session #\(self.displaySessionNumber(for: session)): \(sessionId, privacy: .public) at \(cwd, privacy: .public)")
+        logger.info("Created \(provider.rawValue, privacy: .public) session #\(self.displaySessionNumber(for: session)): \(sessionId, privacy: .public) at \(cwd, privacy: .public)")
         postActiveSessionCountChange()
 
         if activeSessionCount == 1 {
@@ -242,19 +288,29 @@ final class SessionStore {
         return localSlashCommands.contains(command)
     }
 
-    private static func buildPermissionQuestion(tool: String?, toolInput: [String: AnyCodable]?) -> PendingQuestion {
+    private static func buildPermissionQuestion(
+        provider _: AgentProvider,
+        tool: String?,
+        toolInput: [String: AnyCodable]?
+    ) -> PendingQuestion {
         let toolName = tool ?? "Tool"
         let input = toolInput?.mapValues { $0.value }
         let description = SessionEvent.deriveDescription(tool: tool, toolInput: input)
+        let options: [(label: String, description: String?)] = [
+            (label: "Respond in terminal", description: nil),
+        ]
+
         return PendingQuestion(
             question: description ?? "\(toolName) wants to proceed",
             header: "Permission Request",
-            // Claude Code permission prompts always present these three choices
-            options: [
-                (label: "Yes", description: nil),
-                (label: "Yes, and don't ask again", description: nil),
-                (label: "No", description: nil),
-            ]
+            options: options
         )
+    }
+
+    private static func isActivelyWorking(_ session: SessionData) -> Bool {
+        session.isProcessing ||
+            session.task == .working ||
+            session.task == .compacting ||
+            session.task == .waiting
     }
 }

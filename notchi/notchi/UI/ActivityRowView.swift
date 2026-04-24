@@ -34,7 +34,7 @@ struct ActivityRowView: View {
 
     private var bulletColor: Color {
         switch event.status {
-        case .running: return TerminalColors.amber
+        case .running: return TerminalColors.accent
         case .success: return TerminalColors.green
         case .error: return TerminalColors.red
         }
@@ -83,7 +83,7 @@ struct QuestionPromptView: View {
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(TerminalColors.claudeOrange.opacity(0.3), lineWidth: 1)
+                .stroke(TerminalColors.accent.opacity(0.28), lineWidth: 1)
         )
         .padding(.vertical, 4)
         .onChange(of: questions.count) {
@@ -96,7 +96,7 @@ struct QuestionPromptView: View {
             if let header = current.header {
                 Text(header)
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(TerminalColors.claudeOrange)
+                    .foregroundColor(TerminalColors.accentSoft)
                     .textCase(.uppercase)
                     .tracking(0.5)
             }
@@ -148,7 +148,7 @@ struct QuestionPromptView: View {
                 HStack(alignment: .top, spacing: 6) {
                     Text("\(index + 1).")
                         .font(.system(size: 11, weight: .semibold).monospacedDigit())
-                        .foregroundColor(TerminalColors.claudeOrange)
+                        .foregroundColor(TerminalColors.accentSoft)
                         .frame(width: 16, alignment: .trailing)
 
                     VStack(alignment: .leading, spacing: 1) {
@@ -199,11 +199,11 @@ struct WorkingIndicatorView: View {
         HStack(spacing: 3) {
             Text(displaySymbol)
                 .font(.system(size: 14, weight: .bold))
-                .foregroundColor(TerminalColors.claudeOrange)
+                .foregroundColor(TerminalColors.accent)
                 .frame(width: 14, alignment: .center)
             Text(displayText)
                 .font(.system(size: 12, weight: .medium).italic())
-                .foregroundColor(TerminalColors.claudeOrange)
+                .foregroundColor(TerminalColors.accentSoft)
         }
         .padding(.leading, -1)
         .onReceive(dotsTimer) { _ in

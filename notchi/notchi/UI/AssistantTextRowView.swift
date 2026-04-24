@@ -17,7 +17,7 @@ struct AssistantTextRowView: View {
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
             Circle()
-                .fill(TerminalColors.iMessageBlue)
+                .fill(TerminalColors.accent)
                 .frame(width: 5, height: 5)
                 .padding(.top, 6)
 
@@ -55,7 +55,7 @@ struct AssistantTextRowView: View {
         )
         return Text(attributed ?? AttributedString(truncatedText))
             .font(.system(size: 13))
-            .foregroundColor(.white)
+            .foregroundColor(TerminalColors.primaryText)
             .lineLimit(2)
             .multilineTextAlignment(.leading)
     }

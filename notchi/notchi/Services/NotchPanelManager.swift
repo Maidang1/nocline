@@ -68,7 +68,7 @@ final class NotchPanelManager {
         notificationCenter: NotificationCenter = .default,
         userDefaults: UserDefaults = .standard,
         hoverExitDelay: Duration = .zero,
-        activeSessionCountProvider: @escaping @MainActor () -> Int = { SessionStore.shared.activeSessionCount },
+        activeSessionCountProvider: @escaping @MainActor () -> Int = { SessionStore.shared.activeWorkSessionCount },
         mouseLocationProvider: @escaping @MainActor () -> CGPoint = { NSEvent.mouseLocation },
         collapsedHoverEnterFeedback: @escaping @MainActor () -> Void = { HapticService.shared.playHoverClick() },
         pinToggleFeedback: @escaping @MainActor () -> Void = { HapticService.shared.playToggle() },

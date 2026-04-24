@@ -9,20 +9,16 @@ struct SessionSpriteView: View {
         return isSelected ? state.bobAmplitude : state.bobAmplitude * 0.67
     }
 
-    private static let sobTrembleAmplitude: CGFloat = 0.2
-
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: bobAmplitude == 0 && state.emotion != .sob)) { timeline in
-            SpriteSheetView(
-                spriteSheet: state.spriteSheetName,
-                frameCount: state.frameCount,
-                columns: state.columns,
-                fps: state.animationFPS,
-                isAnimating: true
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !state.shouldAnimatePulse && bobAmplitude == 0)) { timeline in
+            CodexAgentBadgeView(
+                state: state,
+                size: 30,
+                date: timeline.date,
+                emphasis: isSelected ? 0.12 : 0
             )
-            .frame(width: 32, height: 32)
             .offset(
-                x: trembleOffset(at: timeline.date, amplitude: state.emotion == .sob ? Self.sobTrembleAmplitude : 0),
+                x: trembleOffset(at: timeline.date, amplitude: 0),
                 y: bobOffset(at: timeline.date, duration: state.bobDuration, amplitude: bobAmplitude)
             )
         }

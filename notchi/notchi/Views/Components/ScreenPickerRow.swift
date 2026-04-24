@@ -85,7 +85,7 @@ struct ScreenPickerRow: View {
         Button(action: action) {
             HStack(spacing: 8) {
                 Circle()
-                    .fill(isSelected ? TerminalColors.green : Color.clear)
+                    .fill(isSelected ? TerminalColors.accent : Color.clear)
                     .frame(width: 6, height: 6)
 
                 VStack(alignment: .leading, spacing: 1) {
@@ -105,7 +105,7 @@ struct ScreenPickerRow: View {
                 if isSelected {
                     Image(systemName: "checkmark")
                         .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(TerminalColors.green)
+                        .foregroundColor(TerminalColors.accent)
                 }
             }
             .padding(.horizontal, SettingsLayout.pickerOptionHorizontalPadding)

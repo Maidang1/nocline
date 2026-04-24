@@ -98,7 +98,6 @@ enum ActivityItem: Identifiable {
 
 struct ExpandedPanelView: View {
     let sessionStore: SessionStore
-    let usageService: ClaudeUsageService
     @Binding var showingSettings: Bool
     @Binding var showingSessionActivity: Bool
     @Binding var isActivityCollapsed: Bool
@@ -184,10 +183,6 @@ struct ExpandedPanelView: View {
                             }
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-
-                        sharedUsageBar
-                            .padding(.horizontal, 12)
-                            .padding(.bottom, 5)
                     }
                 }
 
@@ -221,7 +216,7 @@ struct ExpandedPanelView: View {
 
             VStack(alignment: .leading, spacing: 0) {
                 if !isActivityCollapsed {
-                    Divider().background(Color.white.opacity(0.08))
+                    Divider().background(TerminalColors.border)
 
                     SessionListView(
                         sessions: sessionStore.sortedSessions,
@@ -260,7 +255,7 @@ struct ExpandedPanelView: View {
 
             VStack(alignment: .leading, spacing: 0) {
                 if hasActivity {
-                    Divider().background(Color.white.opacity(0.08))
+                    Divider().background(TerminalColors.border)
                     activitySection
                 } else if !isActivityCollapsed {
                     Spacer()
@@ -278,22 +273,6 @@ struct ExpandedPanelView: View {
             .padding(.horizontal, 12)
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
-    }
-
-    @ViewBuilder
-    private var sharedUsageBar: some View {
-        UsageBarView(
-            usage: usageService.currentUsage,
-            isUsingExtraUsage: usageService.isUsingExtraUsage,
-            isLoading: usageService.isLoading,
-            error: usageService.error,
-            statusMessage: usageService.statusMessage,
-            isStale: usageService.isUsageStale,
-            recoveryAction: usageService.recoveryAction,
-            compact: !shouldShowSessionPicker && isActivityCollapsed,
-            onConnect: { ClaudeUsageService.shared.connectAndStartPolling() },
-            onRetry: { ClaudeUsageService.shared.retryNow() }
-        )
     }
 
     private var activitySection: some View {
@@ -381,11 +360,11 @@ struct ExpandedPanelView: View {
     }
 
     private var emptyState: some View {
-        let hooksInstalled = HookInstaller.isInstalled()
-        let title = hooksInstalled ? "Waiting for activity" : "Hooks not installed"
+        let hooksInstalled = AgentHookInstaller.isAnyInstalled()
+        let title = hooksInstalled ? "Waiting for CLI activity" : "CLI hooks need setup"
         let subtitle = hooksInstalled
-            ? "Send a message in Claude Code to start tracking"
-            : "Open settings to set up Claude Code integration"
+            ? "Send a message in Codex CLI"
+            : "Open settings to set up Codex CLI hooks"
 
         return VStack(spacing: 8) {
             MorphingText(
@@ -426,14 +405,14 @@ struct PanelHeaderButton: View {
         Button(action: action) {
             Image(systemName: sfSymbol)
                 .font(.system(size: 16, weight: .medium))
-                .foregroundColor(.white.opacity(0.7))
+                .foregroundColor(TerminalColors.secondaryText)
                 .frame(width: 32, height: 32)
-                .background(isHovered ? TerminalColors.hoverBackground : TerminalColors.subtleBackground)
+                .background(isHovered ? TerminalColors.insetSurface : TerminalColors.subtleBackground)
                 .clipShape(Circle())
                 .overlay(alignment: .topTrailing) {
                     if showsIndicator {
                         Circle()
-                            .fill(TerminalColors.red)
+                            .fill(TerminalColors.accent)
                             .frame(width: 6, height: 6)
                             .offset(x: -6, y: 6)
                     }

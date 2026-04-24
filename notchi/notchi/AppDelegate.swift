@@ -38,18 +38,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate, SP
         guard !isRunningTests else { return }
 
         NSApplication.shared.setActivationPolicy(.accessory)
-        let claudeConfig = ClaudeConfigDirectoryResolver.resolve()
-        ConversationParser.configureProjectsRootPath(using: claudeConfig)
+        let codexConfig = CodexConfigDirectoryResolver.resolve()
+        ConversationParser.configureCodexSessionsRootPath(using: codexConfig)
         setupNotchWindow()
         observeScreenChanges()
-        observeWakeNotifications()
         startHookServices()
-        startUsageService()
         startUpdater()
     }
 
     private func startHookServices() {
-        HookInstaller.installIfNeeded()
+        AgentHookInstaller.installIfNeeded()
         SocketServer.shared.start { event in
             Task { @MainActor in
                 NotchiStateMachine.shared.handleEvent(event)
@@ -63,7 +61,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate, SP
 
     func applicationWillTerminate(_ notification: Notification) {
         SocketServer.shared.stop()
-        ClaudeUsageService.shared.stopPolling()
     }
 
     @MainActor private func setupNotchWindow() {
@@ -102,15 +99,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate, SP
         )
     }
 
-    private func observeWakeNotifications() {
-        NSWorkspace.shared.notificationCenter.addObserver(
-            self,
-            selector: #selector(handleSystemWake),
-            name: NSWorkspace.didWakeNotification,
-            object: nil
-        )
-    }
-
     @objc private func repositionWindow() {
         MainActor.assumeIsolated {
             guard let panel = notchPanel else { return }
@@ -122,13 +110,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate, SP
         }
     }
 
-    @objc private func handleSystemWake() {
-        MainActor.assumeIsolated {
-            logger.info("System woke, restarting Claude usage polling")
-            ClaudeUsageService.shared.startPolling(afterSystemWake: true)
-        }
-    }
-
     private func windowFrame(for screen: NSScreen) -> NSRect {
         let screenFrame = screen.frame
         return NSRect(
@@ -137,10 +118,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate, SP
             width: screenFrame.width,
             height: windowHeight
         )
-    }
-
-    @MainActor private func startUsageService() {
-        ClaudeUsageService.shared.startPolling()
     }
 
     private func startUpdater() {

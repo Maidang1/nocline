@@ -41,6 +41,11 @@ mkdir -p "$BUILD_ROOT"
 TEST_ARGS=()
 if [[ "$preset" == "focused" ]]; then
     TEST_ARGS=(
+        "-only-testing:Tests/HookInstallerTests"
+        "-only-testing:Tests/HookEventTests"
+        "-only-testing:Tests/ConversationParserTests"
+        "-only-testing:Tests/SessionStoreTests"
+        "-only-testing:Tests/NotchiStateMachineTests"
         "-only-testing:Tests/ClaudeUsageServiceTests"
         "-only-testing:Tests/KeychainManagerTests"
         "-only-testing:Tests/NotchPanelManagerTests"

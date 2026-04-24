@@ -178,6 +178,25 @@ final class SocketServerTests: XCTestCase {
         XCTAssertTrue(delivered)
     }
 
+    func testPayloadWithoutProviderIsIgnored() async throws {
+        let recorder = EventRecorder()
+        let (_, path) = try await makeServer(clientReadTimeout: 0.5, recorder: recorder)
+
+        let client = try connectClient(to: path)
+        let payload = try JSONSerialization.data(withJSONObject: [
+            "session_id": "legacy-claude",
+            "cwd": "/tmp",
+            "event": "SessionStart",
+            "status": "waiting_for_input",
+        ])
+        try client.send(payload)
+        client.closeConnection()
+
+        try await Task.sleep(nanoseconds: 100_000_000)
+        let events = await recorder.snapshot()
+        XCTAssertTrue(events.isEmpty)
+    }
+
     private func makeServer(
         at path: String? = nil,
         clientReadTimeout: TimeInterval,
@@ -213,6 +232,7 @@ final class SocketServerTests: XCTestCase {
 
     private func makeEventPayload(sessionId: String, transcriptPath: String? = nil) throws -> Data {
         var payload: [String: Any] = [
+            "provider": "codex",
             "session_id": sessionId,
             "cwd": "/tmp",
             "event": "SessionStart",

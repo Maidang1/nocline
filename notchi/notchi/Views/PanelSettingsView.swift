@@ -4,30 +4,16 @@ import SwiftUI
 struct PanelSettingsView: View {
     @AppStorage(AppSettings.hideSpriteWhenIdleKey) private var hideSpriteWhenIdle = false
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
-    @State private var hooksInstalled = HookInstaller.isInstalled()
-    @State private var hooksError = false
-    @State private var apiKeyInput = AppSettings.anthropicApiKey ?? ""
+    @State private var codexHooksInstalled = CodexHookInstaller.isInstalled()
+    @State private var codexHooksError = false
     @ObservedObject private var updateManager = UpdateManager.shared
-    private var usageConnected: Bool { ClaudeUsageService.shared.isConnected }
-    private var hasApiKey: Bool { !apiKeyInput.isEmpty }
-
-    private var hookStatusText: String {
-        if hooksError { return "Error" }
-        if hooksInstalled { return "Installed" }
-        return "Not Installed"
-    }
-
-    private var hookStatusColor: Color {
-        hooksInstalled && !hooksError ? TerminalColors.green : TerminalColors.red
-    }
+    @ObservedObject private var codexUsageService = CodexUsageService.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: SettingsLayout.sectionSpacing) {
                     systemSection
-                    Divider().background(Color.white.opacity(0.08))
-                    aiSection
                     Divider().background(Color.white.opacity(0.08))
                     aboutSection
                 }
@@ -42,6 +28,9 @@ struct PanelSettingsView: View {
         .padding(.horizontal, SettingsLayout.panelHorizontalPadding)
         .padding(.top, SettingsLayout.topPadding)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .task {
+            await codexUsageService.refreshIfNeeded()
+        }
     }
 
     private var systemSection: some View {
@@ -66,76 +55,17 @@ struct PanelSettingsView: View {
         }
     }
 
-    private var aiSection: some View {
-        VStack(alignment: .leading, spacing: SettingsLayout.sectionSpacing) {
-            Button(action: installHooksIfNeeded) {
-                SettingsRowView(icon: "terminal", title: "Hooks") {
-                    statusBadge(hookStatusText, color: hookStatusColor)
-                }
-            }
-            .buttonStyle(.plain)
-
-            Button(action: connectUsage) {
-                SettingsRowView(icon: "gauge.with.dots.needle.33percent", title: "Claude Usage") {
-                    statusBadge(
-                        usageConnected ? "Connected" : "Not Connected",
-                        color: usageConnected ? TerminalColors.green : TerminalColors.red
-                    )
-                }
-            }
-            .buttonStyle(.plain)
-
-            apiKeyRow
-        }
-    }
-
-    private var apiKeyRow: some View {
-        VStack(alignment: .leading, spacing: SettingsLayout.apiKeySpacing) {
-            SettingsRowView(icon: "brain", title: "Emotion Analysis") {
-                statusBadge(
-                    hasApiKey ? "Active" : "No Key",
-                    color: hasApiKey ? TerminalColors.green : TerminalColors.red
-                )
-            }
-
-            HStack(spacing: 6) {
-                SecureField("", text: $apiKeyInput)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(TerminalColors.primaryText)
-                    .padding(.horizontal, SettingsLayout.fieldHorizontalPadding)
-                    .padding(.vertical, SettingsLayout.fieldVerticalPadding)
-                    .background(Color.white.opacity(0.06))
-                    .cornerRadius(6)
-                    .onSubmit { saveApiKey() }
-                    .overlay(alignment: .leading) {
-                        if apiKeyInput.isEmpty {
-                            Text("Anthropic API Key")
-                                .font(.system(size: 11, design: .monospaced))
-                                .foregroundColor(TerminalColors.dimmedText)
-                                .padding(.leading, SettingsLayout.fieldHorizontalPadding)
-                                .allowsHitTesting(false)
-                        }
-                    }
-
-                Button(action: saveApiKey) {
-                    Image(systemName: hasApiKey ? "checkmark.circle.fill" : "arrow.right.circle")
-                        .font(.system(size: 14))
-                        .foregroundColor(hasApiKey ? TerminalColors.green : TerminalColors.dimmedText)
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.leading, SettingsLayout.fieldLeadingInset)
-        }
-    }
-
-    private func saveApiKey() {
-        let trimmed = apiKeyInput.trimmingCharacters(in: .whitespacesAndNewlines)
-        AppSettings.anthropicApiKey = trimmed.isEmpty ? nil : trimmed
-    }
-
     private var aboutSection: some View {
         VStack(alignment: .leading, spacing: SettingsLayout.sectionSpacing) {
+            Button(action: installCodexHooksIfNeeded) {
+                SettingsRowView(icon: "terminal", title: "Codex CLI Hooks") {
+                    hookStatusBadge(installed: codexHooksInstalled, hasError: codexHooksError)
+                }
+            }
+            .buttonStyle(.plain)
+
+            codexUsageSection
+
             Button(action: handleUpdatesAction) {
                 SettingsRowView(icon: "arrow.triangle.2.circlepath", title: "Check for Updates") {
                     updateStatusView
@@ -151,6 +81,87 @@ struct PanelSettingsView: View {
                 }
             }
             .buttonStyle(.plain)
+        }
+    }
+
+    private var codexUsageSection: some View {
+        let presentation = CodexUsageSectionPresentation.make(from: codexUsageService.state)
+
+        return VStack(alignment: .leading, spacing: SettingsLayout.usageCardSpacing) {
+            SettingsRowView(icon: "gauge.with.dots.needle.33percent", title: "Codex Usage") {
+                HStack(spacing: 8) {
+                    Button(action: refreshCodexUsage) {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(
+                                codexUsageService.state == .loading
+                                    ? TerminalColors.dimmedText
+                                    : TerminalColors.secondaryText
+                            )
+                            .frame(
+                                width: SettingsLayout.usageRefreshButtonSize,
+                                height: SettingsLayout.usageRefreshButtonSize
+                            )
+                            .background(Color.white.opacity(0.04))
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(codexUsageService.state == .loading)
+
+                    statusBadge(
+                        presentation.statusText,
+                        color: usageStatusColor(for: codexUsageService.state),
+                        fixedWidth: false
+                    )
+                }
+            }
+
+            VStack(spacing: 0) {
+                ForEach(Array(presentation.rows.enumerated()), id: \.offset) { index, row in
+                    if index > 0 {
+                        Divider().background(Color.white.opacity(0.06))
+                    }
+
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(row.title)
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(TerminalColors.primaryText)
+
+                            HStack(spacing: 6) {
+                                Text(row.detailText)
+                                    .font(.system(size: 10))
+                                    .foregroundColor(TerminalColors.dimmedText)
+
+                                if let badgeText = row.badgeText {
+                                    Text(badgeText)
+                                        .font(.system(size: 9, weight: .medium))
+                                        .foregroundColor(TerminalColors.amber)
+                                        .padding(.horizontal, 5)
+                                        .padding(.vertical, 1)
+                                        .background(TerminalColors.amber.opacity(0.14))
+                                        .cornerRadius(4)
+                                }
+                            }
+                        }
+
+                        Spacer()
+
+                        Text(row.remainingText)
+                            .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                            .foregroundColor(TerminalColors.primaryText)
+                    }
+                    .padding(.horizontal, SettingsLayout.usageCardHorizontalPadding)
+                    .padding(.vertical, SettingsLayout.usageCardVerticalPadding)
+                }
+            }
+            .background(TerminalColors.subtleBackground)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.white.opacity(0.06), lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .padding(.leading, 28)
         }
     }
 
@@ -199,10 +210,6 @@ struct PanelSettingsView: View {
         }
     }
 
-    private func connectUsage() {
-        ClaudeUsageService.shared.connectAndStartPolling()
-    }
-
     private func toggleHideSpriteWhenIdle() {
         hideSpriteWhenIdle.toggle()
     }
@@ -215,18 +222,46 @@ struct PanelSettingsView: View {
         }
     }
 
-    private func installHooksIfNeeded() {
-        guard !hooksInstalled else { return }
-        hooksError = false
-        let success = HookInstaller.installIfNeeded()
-        if success {
-            hooksInstalled = HookInstaller.isInstalled()
-        } else {
-            hooksError = true
+    private func refreshCodexUsage() {
+        Task {
+            await codexUsageService.refresh()
         }
     }
 
-    private func statusBadge(_ text: String, color: Color) -> some View {
+    private func usageStatusColor(for state: CodexUsageState) -> Color {
+        switch state {
+        case .idle, .loading:
+            return TerminalColors.amber
+        case .loaded(let snapshot):
+            return snapshot.isFromCache ? TerminalColors.amber : TerminalColors.accent
+        case .unavailable:
+            return TerminalColors.red
+        }
+    }
+
+    private func installCodexHooksIfNeeded() {
+        guard !codexHooksInstalled else { return }
+        codexHooksError = false
+        let success = CodexHookInstaller.installIfNeeded()
+        if success {
+            codexHooksInstalled = CodexHookInstaller.isInstalled()
+        } else {
+            codexHooksError = true
+        }
+    }
+
+    @ViewBuilder
+    private func hookStatusBadge(installed: Bool, hasError: Bool) -> some View {
+        if hasError {
+            statusBadge("Error", color: TerminalColors.red)
+        } else if installed {
+            statusBadge("Ready", color: TerminalColors.accent)
+        } else {
+            statusBadge("Setup Needed", color: TerminalColors.amber)
+        }
+    }
+
+    private func statusBadge(_ text: String, color: Color, fixedWidth: Bool = true) -> some View {
         Text(text)
             .font(.system(size: 10, weight: .medium))
             .foregroundColor(color)
@@ -236,7 +271,7 @@ struct PanelSettingsView: View {
             .padding(.vertical, 2)
             .background(color.opacity(0.15))
             .cornerRadius(4)
-            .frame(maxWidth: 160, alignment: .trailing)
+            .frame(maxWidth: fixedWidth ? 160 : nil, alignment: .trailing)
     }
 
     @ViewBuilder
@@ -251,7 +286,7 @@ struct PanelSettingsView: View {
                     .foregroundColor(TerminalColors.dimmedText)
             }
         case .upToDate:
-            statusBadge("Up to date", color: TerminalColors.green)
+            statusBadge("Up to date", color: TerminalColors.accent)
         case .updateAvailable:
             statusBadge("Update available", color: TerminalColors.amber)
         case .downloading:
@@ -263,7 +298,7 @@ struct PanelSettingsView: View {
                     .foregroundColor(TerminalColors.dimmedText)
             }
         case .readyToInstall:
-            statusBadge("Ready to install", color: TerminalColors.green)
+            statusBadge("Ready to install", color: TerminalColors.accent)
         case .error(let failure):
             statusBadge(failure.label, color: TerminalColors.red)
         case .idle:
@@ -305,7 +340,7 @@ struct ToggleSwitch: View {
     var body: some View {
         ZStack(alignment: isOn ? .trailing : .leading) {
             Capsule()
-                .fill(isOn ? TerminalColors.green : Color.white.opacity(0.15))
+                .fill(isOn ? TerminalColors.accent : Color.white.opacity(0.15))
                 .frame(width: 32, height: 18)
 
             Circle()
