@@ -66,6 +66,18 @@ struct PanelSettingsView: View {
 
             codexUsageSection
 
+            Button(action: {
+                NotchPanelManager.shared.collapse()
+                OverviewWindowController.shared.show()
+            }) {
+                SettingsRowView(icon: "gauge.with.dots.needle.33percent", title: "Codex Overview") {
+                    Image(systemName: "arrow.up.right")
+                        .font(.system(size: 10))
+                        .foregroundColor(TerminalColors.dimmedText)
+                }
+            }
+            .buttonStyle(.plain)
+
             Button(action: handleUpdatesAction) {
                 SettingsRowView(icon: "arrow.triangle.2.circlepath", title: "Check for Updates") {
                     updateStatusView

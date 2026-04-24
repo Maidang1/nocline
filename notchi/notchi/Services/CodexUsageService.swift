@@ -24,7 +24,27 @@ enum CodexUsageState: Equatable {
     case idle
     case loading
     case loaded(CodexUsageSnapshot)
-    case unavailable
+    case unavailable(CodexUsageUnavailableReason)
+}
+
+enum CodexUsageUnavailableReason: Equatable {
+    case notAuthenticated
+    case networkError
+    case localFileMissing
+    case serverError(String)
+
+    var helpText: String {
+        switch self {
+        case .notAuthenticated:
+            return "Run `codex-cli auth login` in terminal"
+        case .networkError:
+            return "Check your internet connection"
+        case .localFileMissing:
+            return "Ensure Codex CLI is installed and logged in"
+        case .serverError(let message):
+            return "Server error: \(message)"
+        }
+    }
 }
 
 struct CodexUsageWindowPresentation: Equatable {
@@ -76,21 +96,21 @@ struct CodexUsageSectionPresentation: Equatable {
                     ),
                 ]
             )
-        case .unavailable:
+        case .unavailable(let reason):
             return CodexUsageSectionPresentation(
                 statusText: "Unavailable",
                 rows: [
                     CodexUsageWindowPresentation(
                         title: "5h Remaining",
                         remainingText: "--",
-                        detailText: "Unavailable",
-                        badgeText: nil
+                        detailText: reason.helpText,
+                        badgeText: "Retry"
                     ),
                     CodexUsageWindowPresentation(
                         title: "Week Remaining",
                         remainingText: "--",
-                        detailText: "Unavailable",
-                        badgeText: nil
+                        detailText: reason == .notAuthenticated ? "Sign in to Codex CLI first" : "Check network connection",
+                        badgeText: "Retry"
                     ),
                 ]
             )
@@ -159,13 +179,23 @@ final class CodexUsageService: ObservableObject {
         do {
             let snapshot = try await loadLatestSnapshot()
             state = .loaded(snapshot)
-            return
+        } catch let error as CodexUsageError {
+            state = .unavailable(reasonFromError(error))
         } catch {
             if let cachedSnapshot = loadCachedSnapshot() {
                 state = .loaded(cachedSnapshot)
             } else {
-                state = .unavailable
+                state = .unavailable(.networkError)
             }
+        }
+    }
+
+    private func reasonFromError(_ error: CodexUsageError) -> CodexUsageUnavailableReason {
+        switch error {
+        case .invalidBaseURL, .missingRateLimits:
+            return .notAuthenticated
+        case .unexpectedResponse:
+            return .serverError("API response error")
         }
     }
 
@@ -204,6 +234,22 @@ final class CodexUsageService: ObservableObject {
             return nil
         }
         return try? Self.parseCachedSnapshot(from: data, now: dependencies.now())
+    }
+
+    func handleUnavailableTap() {
+        Task {
+            state = .loading
+            do {
+                let snapshot = try await loadLatestSnapshot()
+                state = .loaded(snapshot)
+            } catch {
+                if loadCachedSnapshot() != nil {
+                    state = .loaded(loadCachedSnapshot()!)
+                } else {
+                    state = .unavailable(.notAuthenticated)
+                }
+            }
+        }
     }
 }
 
