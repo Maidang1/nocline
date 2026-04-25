@@ -6,7 +6,7 @@ This document covers bug reports, feature ideas, and pull requests.
 
 ### I found a bug
 
-Search [existing issues](https://github.com/sk-ruban/notchi/issues) first. If it is new, open an issue with steps to reproduce, your macOS version, and any relevant logs.
+Search [existing issues](https://github.com/Maidang1/nocline/issues) first. If it is new, open an issue with steps to reproduce, your macOS version, and any relevant logs.
 
 ### I have an idea for a feature
 

@@ -11,6 +11,10 @@ The release script reads from:
 
 - `docs/release-notes/<version>.md`
 
+The release workflow publishes signed copies to:
+
+- `docs/release-notes-signed/<AppName>-<version>.md`
+
 Each release note should describe:
 
 - user-visible changes

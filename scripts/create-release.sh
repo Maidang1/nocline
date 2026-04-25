@@ -14,12 +14,11 @@ SCHEME="notchi"
 PROJECT_PATH="Nocline/Nocline.xcodeproj"
 APPCAST_OUTPUT="docs/appcast.xml"
 APP_NAME="Nocline"
-WEBSITE_APPCAST_OUTPUT="website/public/appcast.xml"
-SIGNED_RELEASE_NOTES_DIR="website/release-notes-signed"
+SIGNED_RELEASE_NOTES_DIR="docs/release-notes-signed"
 
 # TODO: Set your notarytool keychain profile name.
-# Create one with: xcrun notarytool store-credentials "notchi-notarize" --apple-id "you@example.com" --team-id "SXT98GH5HN"
-NOTARYTOOL_PROFILE="notchi-notarize"
+# Create one with: xcrun notarytool store-credentials "nocline-notarize" --apple-id "you@example.com" --team-id "SXT98GH5HN"
+NOTARYTOOL_PROFILE="nocline-notarize"
 
 # Sparkle tools directory — override with SPARKLE_BIN_DIR env var.
 # Falls back to searching DerivedData for the Sparkle build artifacts.
@@ -294,8 +293,8 @@ cp "$APPCAST_OUTPUT" "$APPCAST_STAGING/" 2>/dev/null || true
 
 "$GENERATE_APPCAST" \
     --ed-key-file "$SPARKLE_KEY_FILE" \
-    --download-url-prefix "https://github.com/sk-ruban/notchi/releases/download/v${VERSION}/" \
-    --release-notes-url-prefix "https://updates.notchi.app/sparkle-notes/" \
+    --download-url-prefix "https://github.com/Maidang1/nocline/releases/download/v${VERSION}/" \
+    --release-notes-url-prefix "https://maidang1.github.io/nocline/release-notes-signed/" \
     -o "$APPCAST_OUTPUT" \
     "$APPCAST_STAGING"
 
@@ -305,11 +304,7 @@ cp "$APPCAST_STAGING/${APP_NAME}-${VERSION}.md" \
 
 rm -rf "$APPCAST_STAGING"
 
-mkdir -p "$(dirname "$WEBSITE_APPCAST_OUTPUT")"
-cp "$APPCAST_OUTPUT" "$WEBSITE_APPCAST_OUTPUT"
-
 echo "Appcast written to ${APPCAST_OUTPUT}"
-echo "Website appcast synced to ${WEBSITE_APPCAST_OUTPUT}"
 
 # --- Done ---
 step "Release v${VERSION} built successfully!"
@@ -323,5 +318,5 @@ echo ""
 echo "Next steps:"
 echo "  1. Create a GitHub Release tagged v${VERSION}"
 echo "  2. Upload ${DMG_PATH} and ${RELEASE_NOTES_ASSET} to the GitHub Release"
-echo "  3. Commit ${APPCAST_OUTPUT} and ${WEBSITE_APPCAST_OUTPUT}, then push to main"
+echo "  3. Commit ${APPCAST_OUTPUT} and ${SIGNED_RELEASE_NOTES_DIR}/${APP_NAME}-${VERSION}.md, then push to main"
 echo "  4. Verify the appcast download URL matches your GitHub Release asset URL"

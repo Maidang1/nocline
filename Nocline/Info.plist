@@ -13,7 +13,7 @@
 	<key>SUScheduledImpatientCheckInterval</key>
 	<integer>90000</integer>
 	<key>SUFeedURL</key>
-	<string>https://updates.notchi.app/appcast.xml</string>
+	<string>https://maidang1.github.io/nocline/appcast.xml</string>
 	<key>SURequireSignedFeed</key>
 	<true/>
 	<key>SUShowReleaseNotes</key>

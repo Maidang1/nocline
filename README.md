@@ -1,7 +1,7 @@
 # Nocline
 
 > [!IMPORTANT]
-> If you're currently on Nocline `1.0.0`, please install `1.0.1` or later manually from the DMG [here](https://github.com/sk-ruban/notchi/releases/latest). The in-app updater in `1.0.0` needs that one manual hop.
+> If you're currently on Nocline `1.0.0`, please install `1.0.1` or later manually from the DMG [here](https://github.com/Maidang1/nocline/releases/latest). The in-app updater in `1.0.0` needs that one manual hop.
 
 A macOS notch companion that reacts to Codex CLI activity in real time.
 
@@ -32,7 +32,7 @@ Nocline is a maintained fork of Notchi.
 
 ## Install
 
-1. Download `Nocline-x.x.x.dmg` from the [latest GitHub Release](https://github.com/sk-ruban/notchi/releases/latest)
+1. Download `Nocline-x.x.x.dmg` from the [latest GitHub Release](https://github.com/Maidang1/nocline/releases/latest)
 2. Open the DMG and drag Nocline to Applications
 3. Launch Nocline — it auto-installs Codex CLI hooks on first launch
 4. Start using Codex CLI and watch Nocline react

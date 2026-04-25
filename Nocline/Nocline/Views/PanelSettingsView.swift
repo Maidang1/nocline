@@ -166,11 +166,11 @@ struct PanelSettingsView: View {
     }
 
     private func openGitHubRepo() {
-        NSWorkspace.shared.open(URL(string: "https://github.com/sk-ruban/notchi")!)
+        NSWorkspace.shared.open(URL(string: "https://github.com/Maidang1/nocline")!)
     }
 
     private func openLatestReleasePage() {
-        NSWorkspace.shared.open(URL(string: "https://github.com/sk-ruban/notchi/releases/latest")!)
+        NSWorkspace.shared.open(URL(string: "https://github.com/Maidang1/nocline/releases/latest")!)
     }
 
     private var quitSection: some View {
