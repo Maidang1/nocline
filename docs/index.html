@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Nocline Updates</title>
+  <title>Nocline Update Feed</title>
   <style>
     :root {
       color-scheme: dark;
@@ -72,17 +72,29 @@
       font-family: ui-monospace, "SF Mono", Menlo, monospace;
       font-size: 0.95em;
     }
+
+    .meta {
+      margin-top: 20px;
+      padding-top: 18px;
+      border-top: 1px solid var(--border);
+      font-size: 14px;
+      color: var(--muted);
+    }
   </style>
 </head>
 <body>
   <main>
-    <h1>Nocline Updates</h1>
-    <p>This GitHub Pages site hosts the Sparkle feed and signed release notes for Nocline.</p>
+    <h1>Nocline Update Feed</h1>
+    <p>This GitHub Pages site hosts the Sparkle appcast and release note assets used by Nocline.</p>
     <ul>
       <li><a href="./appcast.xml">Sparkle appcast</a></li>
-      <li><a href="./release-notes-signed/">Signed release notes directory</a></li>
+      <li><a href="./release-notes-signed/">Published release notes directory</a></li>
       <li><a href="https://github.com/Maidang1/nocline/releases/latest">Latest GitHub release</a></li>
     </ul>
+    <div class="meta">
+      <p>The current appcast is a bootstrap feed. Release items are generated during the release workflow and published here through GitHub Pages.</p>
+      <p>Feed URL: <code>https://maidang1.github.io/nocline/appcast.xml</code></p>
+    </div>
   </main>
 </body>
 </html>

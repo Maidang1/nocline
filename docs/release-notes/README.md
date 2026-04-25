@@ -11,7 +11,7 @@ The release script reads from:
 
 - `docs/release-notes/<version>.md`
 
-The release workflow publishes signed copies to:
+The release workflow publishes release note assets to:
 
 - `docs/release-notes-signed/<AppName>-<version>.md`
 
@@ -22,3 +22,8 @@ Each release note should describe:
 - upgrade notes when relevant
 
 Keep the file name aligned with `MARKETING_VERSION` in the Xcode project before running `./scripts/create-release.sh <version>`.
+
+This repository publishes the appcast and generated release note assets through GitHub Pages:
+
+- `https://maidang1.github.io/nocline/appcast.xml`
+- `https://maidang1.github.io/nocline/release-notes-signed/`
