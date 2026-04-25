@@ -14,8 +14,6 @@
 	<integer>90000</integer>
 	<key>SUFeedURL</key>
 	<string>https://maidang1.github.io/nocline/appcast.xml</string>
-	<key>SURequireSignedFeed</key>
-	<true/>
 	<key>SUShowReleaseNotes</key>
 	<true/>
 	<key>SUPublicEDKey</key>
