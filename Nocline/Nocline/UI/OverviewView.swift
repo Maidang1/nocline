@@ -1,26 +1,109 @@
 import SwiftUI
 
+enum OverviewTab: String, CaseIterable, Identifiable {
+    case usage = "Usage"
+
+    var id: String { rawValue }
+
+    var icon: String {
+        switch self {
+        case .usage: return "gauge.with.dots.needle.33percent"
+        }
+    }
+}
+
 struct OverviewView: View {
     @ObservedObject private var codexUsageService = CodexUsageService.shared
-    @Environment(\.dismiss) private var dismiss
+    @State private var selectedTab: OverviewTab = .usage
 
     var body: some View {
-        VStack(spacing: 0) {
-            titleBar
+        HStack(spacing: 0) {
+            sidebar
             Divider().background(TerminalColors.border)
-            usageContent
-            Spacer()
+            contentArea
         }
-        .frame(width: 500, height: 450)
+        .frame(minWidth: 600, minHeight: 400)
         .background(TerminalColors.panelBackground)
         .task {
             await codexUsageService.refreshIfNeeded()
         }
     }
 
-    private var titleBar: some View {
+    private var sidebar: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Overview")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(TerminalColors.secondaryText)
+                .padding(.horizontal, 12)
+                .padding(.top, 16)
+                .padding(.bottom, 8)
+
+            ForEach(OverviewTab.allCases) { tab in
+                Button(action: { selectedTab = tab }) {
+                    HStack(spacing: 10) {
+                        Image(systemName: tab.icon)
+                            .font(.system(size: 12))
+                            .foregroundColor(
+                                selectedTab == tab
+                                    ? TerminalColors.primaryText
+                                    : TerminalColors.secondaryText
+                            )
+                            .frame(width: 20)
+
+                        Text(tab.rawValue)
+                            .font(.system(size: 12, weight: selectedTab == tab ? .medium : .regular))
+                            .foregroundColor(
+                                selectedTab == tab
+                                    ? TerminalColors.primaryText
+                                    : TerminalColors.secondaryText
+                            )
+
+                        Spacer()
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(
+                                selectedTab == tab
+                                    ? TerminalColors.subtleBackground
+                                    : Color.clear
+                            )
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+
+            Spacer()
+        }
+        .frame(width: 180)
+        .padding(.horizontal, 8)
+        .background(TerminalColors.panelBackground)
+    }
+
+    private var contentArea: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            headerBar
+
+            Divider().background(TerminalColors.border)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    switch selectedTab {
+                    case .usage:
+                        usageContent
+                    }
+                }
+                .padding(.top, 16)
+            }
+            .scrollIndicators(.hidden)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private var headerBar: some View {
         HStack {
-            Text("Codex Usage")
+            Text(selectedTab.rawValue)
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(TerminalColors.primaryText)
 
@@ -36,14 +119,14 @@ struct OverviewView: View {
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 20)
         .padding(.vertical, 12)
     }
 
     private var usageContent: some View {
         let presentation = CodexUsageSectionPresentation.make(from: codexUsageService.state)
 
-        return VStack(alignment: .leading, spacing: 12) {
+        return VStack(alignment: .leading, spacing: 16) {
             HStack {
                 statusBadge(
                     presentation.statusText,
@@ -65,15 +148,14 @@ struct OverviewView: View {
                 .buttonStyle(.plain)
                 .disabled(codexUsageService.state == .loading)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 16)
+            .padding(.horizontal, 20)
 
             usageCardsSection(presentation: presentation)
         }
     }
 
     private func usageCardsSection(presentation: CodexUsageSectionPresentation) -> some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 0) {
             ForEach(Array(presentation.rows.enumerated()), id: \.offset) { index, row in
                 if index > 0 {
                     Divider().background(Color.white.opacity(0.06))
@@ -118,7 +200,7 @@ struct OverviewView: View {
                 .stroke(Color.white.opacity(0.06), lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 10))
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 20)
     }
 
     private func usageStatusColor(for state: CodexUsageState) -> Color {
