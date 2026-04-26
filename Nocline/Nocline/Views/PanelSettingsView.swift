@@ -3,6 +3,7 @@ import SwiftUI
 
 struct PanelSettingsView: View {
     @AppStorage(AppSettings.hideSpriteWhenIdleKey) private var hideSpriteWhenIdle = false
+    @ObservedObject private var appearanceSettings = AppearanceSettings.shared
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var codexHooksInstalled = CodexHookInstaller.isInstalled()
     @State private var codexHooksError = false
@@ -14,7 +15,7 @@ struct PanelSettingsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: SettingsLayout.sectionSpacing) {
                     systemSection
-                    Divider().background(Color.white.opacity(0.08))
+                    Divider().background(TerminalColors.border)
                     aboutSection
                 }
                 .padding(.top, SettingsLayout.topPadding)
@@ -36,6 +37,13 @@ struct PanelSettingsView: View {
     private var systemSection: some View {
         VStack(alignment: .leading, spacing: SettingsLayout.sectionSpacing) {
             ScreenPickerRow(screenSelector: ScreenSelector.shared)
+
+            AppearancePickerRow(
+                selectedMode: appearanceSettings.mode,
+                onSelectMode: { mode in
+                    appearanceSettings.setMode(mode)
+                }
+            )
 
             SoundPickerView()
 
@@ -126,7 +134,7 @@ struct PanelSettingsView: View {
                             width: SettingsLayout.usageRefreshButtonSize,
                             height: SettingsLayout.usageRefreshButtonSize
                         )
-                        .background(Color.white.opacity(0.04))
+                        .background(TerminalColors.controlBackground)
                         .clipShape(Circle())
                 }
                 .buttonStyle(.plain)
@@ -345,17 +353,56 @@ struct SettingsRowView<Trailing: View>: View {
     }
 }
 
+struct AppearancePickerRow: View {
+    let selectedMode: AppAppearanceMode
+    let onSelectMode: (AppAppearanceMode) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SettingsRowView(icon: "circle.lefthalf.filled", title: "Appearance") {
+                Text(selectedMode.displayName)
+                    .font(.system(size: 11))
+                    .foregroundColor(TerminalColors.secondaryText)
+            }
+
+            HStack(spacing: 6) {
+                ForEach(AppAppearanceMode.allCases) { mode in
+                    Button(action: { onSelectMode(mode) }) {
+                        Text(mode.displayName)
+                            .font(.system(size: 11, weight: selectedMode == mode ? .semibold : .medium))
+                            .foregroundColor(
+                                selectedMode == mode
+                                    ? TerminalColors.primaryText
+                                    : TerminalColors.secondaryText
+                            )
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 6)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(selectedMode == mode ? TerminalColors.hoverBackground : Color.clear)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(3)
+            .background(TerminalColors.subtleBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
+    }
+}
+
 struct ToggleSwitch: View {
     let isOn: Bool
 
     var body: some View {
         ZStack(alignment: isOn ? .trailing : .leading) {
             Capsule()
-                .fill(isOn ? TerminalColors.accent : Color.white.opacity(0.15))
+                .fill(isOn ? TerminalColors.accent : TerminalColors.toggleOffBackground)
                 .frame(width: 32, height: 18)
 
             Circle()
-                .fill(Color.white)
+                .fill(TerminalColors.toggleThumb)
                 .frame(width: 14, height: 14)
                 .padding(2)
         }
@@ -366,5 +413,5 @@ struct ToggleSwitch: View {
 #Preview {
     PanelSettingsView()
         .frame(width: 402, height: 400)
-        .background(Color.black)
+        .background(TerminalColors.panelBackground)
 }

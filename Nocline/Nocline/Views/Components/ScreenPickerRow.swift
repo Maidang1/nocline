@@ -154,5 +154,5 @@ struct ScreenPickerRow: View {
     ScreenPickerRow(screenSelector: ScreenSelector.shared)
         .frame(width: 300)
         .padding()
-        .background(Color.black)
+        .background(TerminalColors.panelBackground)
 }

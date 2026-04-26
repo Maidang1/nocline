@@ -207,7 +207,9 @@ struct NotchContentView: View {
         .padding(.bottom, isExpanded ? 12 : collapsedHoverBottomInset)
         .background {
             ZStack(alignment: .top) {
-                TerminalColors.panelBackground
+                isExpanded
+                    ? TerminalColors.panelBackground
+                    : TerminalColors.collapsedNotchBackground
                 GrassIslandView(
                     sessions: sessionStore.sortedSessions,
                     selectedSessionId: sessionStore.selectedSessionId,
@@ -260,7 +262,7 @@ struct NotchContentView: View {
         )
         .shadow(
             color: isExpanded
-                ? .black.opacity(0.55)
+                ? TerminalColors.shadow
                 : (panelManager.isCollapsedHovered ? TerminalColors.accentGlow.opacity(0.18) : .clear),
             radius: isExpanded ? 12 : 8
         )

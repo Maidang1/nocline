@@ -2,6 +2,7 @@ import Foundation
 
 struct AppSettings {
     static let hideSpriteWhenIdleKey = "hideSpriteWhenIdle"
+    static let appearanceModeKey = "appearanceMode"
 
     private static let notificationSoundKey = "notificationSound"
     private static let isMutedKey = "isMuted"
@@ -10,6 +11,20 @@ struct AppSettings {
     static var hideSpriteWhenIdle: Bool {
         get { UserDefaults.standard.bool(forKey: hideSpriteWhenIdleKey) }
         set { UserDefaults.standard.set(newValue, forKey: hideSpriteWhenIdleKey) }
+    }
+
+    static var appearanceMode: AppAppearanceMode {
+        get {
+            guard let rawValue = UserDefaults.standard.string(forKey: appearanceModeKey),
+                  let mode = AppAppearanceMode(rawValue: rawValue) else {
+                return .system
+            }
+            return mode
+        }
+        set {
+            UserDefaults.standard.set(newValue.rawValue, forKey: appearanceModeKey)
+            NotificationCenter.default.post(name: .noclineAppearanceModeDidChange, object: nil)
+        }
     }
 
     static var notificationSound: NotificationSound {

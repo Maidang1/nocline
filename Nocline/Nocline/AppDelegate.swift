@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate, SP
     private let windowHeight: CGFloat = 500
 
     private var updaterStarted = false
+    private var appearanceObserver: NSObjectProtocol?
     private var temporarilyRegularForUpdateSession = false
     private lazy var standardUserDriver = SPUStandardUserDriver(
         hostBundle: .main,
@@ -38,6 +39,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate, SP
         guard !isRunningTests else { return }
 
         NSApplication.shared.setActivationPolicy(.accessory)
+        configureAppearance()
         let codexConfig = CodexConfigDirectoryResolver.resolve()
         ConversationParser.configureCodexSessionsRootPath(using: codexConfig)
         setupNotchWindow()
@@ -61,6 +63,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate, SP
 
     func applicationWillTerminate(_ notification: Notification) {
         SocketServer.shared.stop()
+        if let appearanceObserver {
+            NotificationCenter.default.removeObserver(appearanceObserver)
+        }
+    }
+
+    private func configureAppearance() {
+        AppSettings.appearanceMode.applyToApplication()
+        appearanceObserver = NotificationCenter.default.addObserver(
+            forName: .noclineAppearanceModeDidChange,
+            object: nil,
+            queue: .main
+        ) { _ in
+            Task { @MainActor in
+                AppSettings.appearanceMode.applyToApplication()
+            }
+        }
     }
 
     @MainActor private func setupNotchWindow() {
@@ -70,7 +88,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate, SP
 
         let panel = NotchPanel(frame: windowFrame(for: screen))
 
-        let contentView = NotchContentView()
+        let contentView = NoclineAppearanceRoot {
+            NotchContentView()
+        }
         let hostingView = NSHostingView(rootView: contentView)
 
         let hitTestView = NotchHitTestView()

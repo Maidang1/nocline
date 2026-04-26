@@ -46,10 +46,11 @@ if [[ "$preset" == "focused" ]]; then
         "-only-testing:Tests/ConversationParserTests"
         "-only-testing:Tests/SessionStoreTests"
         "-only-testing:Tests/NoclineStateMachineTests"
-        "-only-testing:Tests/ClaudeUsageServiceTests"
-        "-only-testing:Tests/KeychainManagerTests"
+        "-only-testing:Tests/AppSettingsTests"
+        "-only-testing:Tests/CodexUsageServiceTests"
+        "-only-testing:Tests/CodexActivityServiceTests"
+        "-only-testing:Tests/TerminalColorsTests"
         "-only-testing:Tests/NotchPanelManagerTests"
-        "-only-testing:Tests/UsageBarViewTests"
     )
 fi
 

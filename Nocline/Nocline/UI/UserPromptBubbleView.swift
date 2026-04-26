@@ -6,14 +6,14 @@ struct UserPromptBubbleView: View {
     var body: some View {
         Text(text)
             .font(.system(size: 13))
-            .foregroundColor(.white)
+            .foregroundColor(TerminalColors.promptBubbleText)
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 18)
                     .fill(
                         LinearGradient(
-                            colors: [TerminalColors.accentMuted, TerminalColors.elevatedSurface],
+                            colors: [TerminalColors.promptBubbleStart, TerminalColors.promptBubbleEnd],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )

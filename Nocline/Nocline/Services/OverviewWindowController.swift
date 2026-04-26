@@ -5,14 +5,16 @@ final class OverviewWindowController {
     static let shared = OverviewWindowController()
 
     private var panel: OverviewPanel?
-    private var hostingView: NSHostingView<OverviewView>?
+    private var hostingView: NSHostingView<NoclineAppearanceRoot<OverviewView>>?
 
     private init() {}
 
     func show() {
         if panel == nil {
             let panel = OverviewPanel()
-            let hostingView = NSHostingView(rootView: OverviewView())
+            let hostingView = NSHostingView(rootView: NoclineAppearanceRoot {
+                OverviewView()
+            })
             panel.contentView = hostingView
             hostingView.frame = NSRect(x: 0, y: 0, width: 500, height: 450)
             self.panel = panel
